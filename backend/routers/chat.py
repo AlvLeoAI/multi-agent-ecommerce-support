@@ -2,7 +2,7 @@
 Chat API Router with Persistent Memory + Quality Tracking
 Tracks response time, tokens, steps, and success rate for each conversation
 """
-
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 from fastapi import APIRouter, HTTPException
 from typing import Dict
 import uuid
@@ -68,6 +68,7 @@ general_agent = Agent(
     name="GeneralAgent",
     model=gemini_model,
     instruction="You are a friendly customer support agent. Handle greetings and general questions.",
+    api_key=GOOGLE_API_KEY,
     tools=[escalate_tool],
 )
 
@@ -75,6 +76,7 @@ product_agent = Agent(
     name="ProductAgent",
     model=gemini_model,
     instruction="You are a product expert. Use google_search to find real products.",
+    api_key=GOOGLE_API_KEY,
     tools=[google_search],
 )
 
@@ -82,6 +84,7 @@ calculation_agent = Agent(
     name="CalculationAgent",
     model=gemini_model,
     instruction="You are a calculator. Perform math calculations accurately.",
+    api_key=GOOGLE_API_KEY,
     code_executor=BuiltInCodeExecutor(),
 )
 
@@ -93,6 +96,7 @@ coordinator_agent = Agent(
     - ProductAgent: Product searches
     - CalculationAgent: Math calculations
     """,
+    api_key=GOOGLE_API_KEY,
     tools=[
         AgentTool(agent=general_agent),
         AgentTool(agent=product_agent),
