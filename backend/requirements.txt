@@ -1,0 +1,9 @@
+fastapi==0.112.0
+uvicorn[standard]==0.34.0
+python-dotenv==1.0.1
+git+https://github.com/google/adk-python.git
+pydantic==2.10.3
+google-genai
+google-cloud-aiplatform
+pandas
+numpy
