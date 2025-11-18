@@ -18,7 +18,7 @@ class EcommerceAPIClient:
         Args:
             base_url: Base URL of the API (default: http://localhost:8000)
         """
-        self.base_url = base_url or os.getenv("API_BASE_URL", "http://localhost:8000")
+        self.base_url = base_url or os.getenv("API_BASE_URL", "https://ecommerce-agent-backend-89106065348.southamerica-east1.run.app")
     
     def send_message(
         self,
