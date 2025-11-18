@@ -2,7 +2,11 @@
 Chat API Router with Persistent Memory + Quality Tracking
 Tracks response time, tokens, steps, and success rate for each conversation
 """
+
+import os
+
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+
 from fastapi import APIRouter, HTTPException
 from typing import Dict
 import uuid
