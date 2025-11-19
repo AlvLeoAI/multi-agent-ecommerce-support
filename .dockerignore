@@ -1,0 +1,12 @@
+.git
+.gitignore
+.dockerignore
+.venv
+venv
+__pycache__
+.pytest_cache
+.vscode
+.idea
+*.md
+tests/
+images/
