@@ -1,4 +1,4 @@
-# Python
+# --- Python & Virtual Envs ---
 __pycache__/
 *.py[cod]
 *$py.class
@@ -9,32 +9,39 @@ venv/
 .venv/
 ENV/
 *.egg-info/
+.coverage       # <--- Nuevo: Reporte de cobertura de tests
+htmlcov/        # <--- Nuevo: Reporte visual de cobertura
 
-# IDEs
+# --- Testing (Pytest) ---
+.pytest_cache/  # <--- Nuevo: Caché de tus tests
+
+# --- IDEs ---
 .vscode/
 .idea/
 *.swp
 *.swo
 
-# OS
+# --- OS Junk ---
 .DS_Store
 Thumbs.db
 
-# Database
+# --- Database & Local Data ---
 *.db
 *.sqlite
 *.sqlite3
+data/           # <--- Recomendación: Ignorar toda la carpeta de datos locales
 
-# Environment variables
+# --- Environment & Secrets ---
 .env
 .env.local
-
-# Logs
-*.log
-
-# Streamlit
 .streamlit/secrets.toml
 
-# Google Cloud
-*.json
+# --- Logs ---
+*.log
+
+# --- Google Cloud & Credentials ---
+# En vez de ignorar todos los json, ignoramos patrones de claves comunes
+*service-account*.json
+*credential*.json
 gcloud-key.json
+client_secret*.json
