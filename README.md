@@ -41,18 +41,21 @@ graph TD
     
     Response[⚡ Final Response] --> Memory[💾 SQLite Memory]
     Memory --> Quality[📊 Quality Tracker]
-Specialization: The Product Agent has access to search tools, while the Calculation Agent runs Python code for math.
+```
 
-Reliability: Separation of concerns prevents logic conflicts.
+* **Specialization:** The *Product Agent* has access to search tools, while the *Calculation Agent* runs Python code for math.
+* **Reliability:** Separation of concerns prevents logic conflicts.
+* **Scalability:** New agents (e.g., "Shipping Agent") can be added without breaking existing logic.
 
-Scalability: New agents (e.g., "Shipping Agent") can be added without breaking existing logic.
+---
 
-🏗️ System Architecture
-The project follows a clean Monorepo structure separating the reactive frontend from the logic-heavy backend.
+## 🏗️ System Architecture
 
-📂 Project Structure
-Bash
+The project follows a clean **Monorepo** structure separating the reactive frontend from the logic-heavy backend.
 
+### 📂 Project Structure
+
+```bash
 multi-agent-ecommerce/
 ├── 🐳 .devcontainer/       # Standardized Development Environment
 ├── 📂 backend/             # FastAPI Application
@@ -65,78 +68,86 @@ multi-agent-ecommerce/
 │   └── 📄 Home.py          # Landing Page
 ├── 📄 ARCHITECTURE.md      # Deep dive into system design
 └── 📄 DEPLOYMENT.md        # Production deployment guide
-✨ Key Features
-1. Intelligent Orchestration
-Uses Google ADK to route queries. If a user asks "How much is the iPhone 15 plus 20% tax?", the Coordinator invokes the Product Agent to get the price and then the Calculation Agent to compute the total.
+```
 
-2. Persistent Memory (Stateful)
-Unlike basic RAG bots, this system remembers.
+---
 
-Session Management: Unique session IDs track conversations.
+## ✨ Key Features
 
-Context Injection: Past interactions are injected into the agent's context window.
+### 1. Intelligent Orchestration
+Uses **Google ADK** to route queries. If a user asks *"How much is the iPhone 15 plus 20% tax?"*, the Coordinator invokes the **Product Agent** to get the price and then the **Calculation Agent** to compute the total.
 
-3. Real-Time Quality Engineering
-Includes a custom QualityTracker class that monitors:
+### 2. Persistent Memory (Stateful)
+Unlike basic RAG bots, this system **remembers**.
+* **Session Management:** Unique session IDs track conversations.
+* **Context Injection:** Past interactions are injected into the agent's context window.
 
-⏱️ Latency: Response time per turn.
+### 3. Real-Time Quality Engineering
+Includes a custom `QualityTracker` class that monitors:
+* ⏱️ **Latency:** Response time per turn.
+* 🎫 **Success Rate:** Automated conversation scoring.
+* 🪙 **Token Usage:** Cost monitoring.
 
-🎫 Success Rate: Automated conversation scoring.
+---
 
-🪙 Token Usage: Cost monitoring.
+## 🚀 Setup Instructions
 
-🚀 Setup Instructions
-Prerequisites
-Python 3.10+
+### Prerequisites
+* Python 3.10+
+* Google Cloud API Key (Gemini)
 
-Google Cloud API Key (Gemini)
+### Installation
 
-Installation
-Clone the repository
+1.  **Clone the repository**
+    ```bash
+    git clone https://github.com/AlvLeoAl/multi-agent-ecommerce-support.git
+    cd multi-agent-ecommerce-support
+    ```
 
-Bash
+2.  **Create Virtual Environment**
+    ```bash
+    python -m venv .venv
+    source .venv/bin/activate  # Windows: .venv\Scripts\activate
+    ```
 
-git clone [https://github.com/AlvLeoAl/multi-agent-ecommerce-support.git](https://github.com/AlvLeoAl/multi-agent-ecommerce-support.git)
-cd multi-agent-ecommerce-support
-Create Virtual Environment
+3.  **Install Dependencies**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-Bash
+4.  **Configure Environment**
+    Create a `.env` file in the root:
+    ```env
+    GOOGLE_API_KEY=your_api_key_here
+    ```
 
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-Install Dependencies
+5.  **Run the System**
+    *Terminal 1 (Backend):*
+    ```bash
+    uvicorn backend.main:app --reload --port 8000
+    ```
+    *Terminal 2 (Frontend):*
+    ```bash
+    cd frontend
+    streamlit run Home.py
+    ```
 
-Bash
+---
 
-pip install -r requirements.txt
-Configure Environment Create a .env file in the root:
+## 🛠️ Technology Stack
 
-Code snippet
+* **LLM Orchestration:** Google Agent Development Kit (ADK), Gemini 2.0 Flash
+* **Backend:** FastAPI, Pydantic, SQLite
+* **Frontend:** Streamlit, Plotly
+* **DevOps:** Docker, DevContainers
 
-GOOGLE_API_KEY=your_api_key_here
-Run the System Terminal 1 (Backend):
+---
 
-Bash
+## 📬 Contact
 
-uvicorn backend.main:app --reload --port 8000
-Terminal 2 (Frontend):
+**Alvaro** - *AI Solutions Engineer*
+* Building scalable AI architectures bridging business logic and software engineering.
+* [LinkedIn](https://www.linkedin.com/in/alvarolvazquez) | [Email](mailto:alvaroleopoldovazquez@gmail.com)
 
-Bash
-
-cd frontend
-streamlit run Home.py
-🛠️ Technology Stack
-LLM Orchestration: Google Agent Development Kit (ADK), Gemini 2.0 Flash
-
-Backend: FastAPI, Pydantic, SQLite
-
-Frontend: Streamlit, Plotly
-
-DevOps: Docker, DevContainers
-
-📬 Contact
-Alvaro - AI Solutions Engineer
-
-Building scalable AI architectures bridging business logic and software engineering.
-
-Built with ❤️ using Google ADK & Python.
+---
+*Built with ❤️ using Google ADK & Python.*
