@@ -9,11 +9,11 @@ venv/
 .venv/
 ENV/
 *.egg-info/
-.coverage       # <--- Nuevo: Reporte de cobertura de tests
-htmlcov/        # <--- Nuevo: Reporte visual de cobertura
+.coverage       
+htmlcov/        
 
 # --- Testing (Pytest) ---
-.pytest_cache/  # <--- Nuevo: Caché de tus tests
+.pytest_cache/  
 
 # --- IDEs ---
 .vscode/
@@ -29,7 +29,7 @@ Thumbs.db
 *.db
 *.sqlite
 *.sqlite3
-data/           # <--- Recomendación: Ignorar toda la carpeta de datos locales
+data/           
 
 # --- Environment & Secrets ---
 .env
@@ -40,7 +40,7 @@ data/           # <--- Recomendación: Ignorar toda la carpeta de datos locales
 *.log
 
 # --- Google Cloud & Credentials ---
-# En vez de ignorar todos los json, ignoramos patrones de claves comunes
+
 *service-account*.json
 *credential*.json
 gcloud-key.json
