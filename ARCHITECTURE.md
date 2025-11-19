@@ -34,28 +34,28 @@ This system implements **Google's AgentOps best practices** as outlined in the "
 ```mermaid
 graph TD
     subgraph "Frontend (Streamlit)"
-        UI[💻 Interactive Chat Interface]
-        Cat[🛒 Product Catalog]
-        Dash[📊 Quality Dashboard]
+        UI["💻 Interactive Chat Interface"]
+        Cat["🛒 Product Catalog"]
+        Dash["📊 Quality Dashboard"]
     end
 
     subgraph "Backend (FastAPI)"
-        API[🔌 RESTful API Endpoints]
-        Sess[🆔 Session Management]
-        Track[📉 Quality Metrics Tracking]
+        API["🔌 RESTful API Endpoints"]
+        Sess["🆔 Session Management"]
+        Track["📉 Quality Metrics Tracking"]
     end
 
     subgraph "Agent Layer (Google ADK)"
-        Coord[🧠 Coordinator Agent (Gemini 2.0)]
-        Gen[💬 General Agent]
-        Prod[📦 Product Agent]
-        Calc[🧮 Calculation Agent]
+        Coord["🧠 Coordinator Agent (Gemini 2.0)"]
+        Gen["💬 General Agent"]
+        Prod["📦 Product Agent"]
+        Calc["🧮 Calculation Agent"]
     end
 
     subgraph "Data Layer (SQLite)"
-        Mem[(💾 Persistent Chat Memory)]
-        Met[(📈 Quality Metrics Storage)]
-        DB[(🛒 Product Catalog)]
+        Mem[("💾 Persistent Chat Memory")]
+        Met[("📈 Quality Metrics Storage")]
+        DB[("🛒 Product Catalog")]
     end
 
     UI --> API
