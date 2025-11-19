@@ -8,47 +8,42 @@ import os
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager  
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    
-    logging.info("🚀 E-Commerce Agent System is starting up...")
-    logging.info("✅ Database connection established (Simulated)")
-    
-    yield  
-    
-    
-    logging.info("🛑 Shutting down system...")
-    logging.info("💤 Connections closed")
-
-
-app = FastAPI(
-    lifespan=lifespan,  
-    title="E-Commerce Support API",
-    description="Multi-Agent Customer Support System powered by Google GenAI",
-    version="1.0.0"
-)
-
-
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
+# --- 1. Load environment variables at startup ---
+# Path: backend/ -> ecommerce_support/ -> multi-agent-ecommerce/ (.env)
 env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=env_path)
 
-
+# # Import routers (after loading .env in case the routers need variables)
 from routers import products, metrics, chat
 
-
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 
+# --- 2. Define Lifespan (Life Cycle) ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # # Startup logic
+    logging.info("🚀 E-Commerce Agent System is starting up...")
+    logging.info("✅ Database connection established (Simulated)")
+    
+    yield  # <--- The app runs here
+    
+    # # Shutdown logic
+    logging.info("🛑 Shutting down system...")
+    logging.info("💤 Connections closed")
+
+# --- 3. Create the App (ONLY ONCE) ---
 app = FastAPI(
+    lifespan=lifespan,  # <--- Connected
     title="E-Commerce Support API",
     description="Multi-Agent Customer Support System powered by Google GenAI",
     version="1.0.0"
 )
 
-
+# --- 4. Middlewares ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,13 +52,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
+# --- 5. Routers ---
 app.include_router(chat.router)
 app.include_router(products.router)
 app.include_router(metrics.router)
 logging.info("All routers included.")
 
-
+# --- 6. Endpoints Base ---
 @app.get("/")
 async def root():
     """Root endpoint"""
@@ -88,12 +83,10 @@ async def health_check():
         "service": "ecommerce-support-api"
     }
 
+# --- 7. Entry Point ---
 if __name__ == "__main__":
-    
     try:
-        # Get the port from environment variables or default to 800
         port = int(os.getenv("PORT", 8000))
-        
         uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
     except Exception as e:
         logging.error(f"Failed to start Uvicorn server: {e}")
