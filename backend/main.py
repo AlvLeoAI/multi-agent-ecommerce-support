@@ -13,7 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 # Asumimos que .env está en la raíz del proyecto (dos niveles arriba de main.py)
 # Ruta: backend/ -> ecommerce_support/ -> multi-agent-ecommerce/
-env_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
+env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=env_path)
 # --- Fin del Fix ---
 
