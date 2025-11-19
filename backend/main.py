@@ -8,20 +8,38 @@ import os
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager  
 
-# --- FIX: Cargar variables de entorno ---
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    
+    logging.info("🚀 E-Commerce Agent System is starting up...")
+    logging.info("✅ Database connection established (Simulated)")
+    
+    yield  
+    
+    
+    logging.info("🛑 Shutting down system...")
+    logging.info("💤 Connections closed")
+
+
+app = FastAPI(
+    lifespan=lifespan,  
+    title="E-Commerce Support API",
+    description="Multi-Agent Customer Support System powered by Google GenAI",
+    version="1.0.0"
+)
+
+
 from dotenv import load_dotenv
-# Asumimos que .env está en la raíz del proyecto (dos niveles arriba de main.py)
-# Ruta: backend/ -> ecommerce_support/ -> multi-agent-ecommerce/
+
 env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=env_path)
-# --- Fin del Fix ---
 
-# Importa correctamente todos los routers usando importaciones absolutas simples.
-# Esto funciona si Uvicorn se ejecuta desde la carpeta que contiene el paquete 'routers'.
+
 from routers import products, metrics, chat
 
-# Configura logging para mejor diagnóstico
+
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(
@@ -30,8 +48,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware
-# Usando allow_origins=["*"] para máxima flexibilidad en desarrollo
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -40,8 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
-# El router de chat ya tiene el prefijo /api/v1/chat/ definido
+
 app.include_router(chat.router)
 app.include_router(products.router)
 app.include_router(metrics.router)
@@ -73,11 +89,11 @@ async def health_check():
     }
 
 if __name__ == "__main__":
-    # La ejecución directa de main.py debe usar el nombre del módulo
+    
     try:
-        # Get the port from environment variables or default to 8000
+        # Get the port from environment variables or default to 800
         port = int(os.getenv("PORT", 8000))
-        # Nota: Usamos "main:app" ya que es una convención de Uvicorn que funciona con importaciones simples
+        
         uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
     except Exception as e:
         logging.error(f"Failed to start Uvicorn server: {e}")
