@@ -1,9 +1,27 @@
+# --- Core Framework ---
 fastapi==0.112.0
 uvicorn[standard]==0.34.0
-python-dotenv==1.0.1
-git+https://github.com/google/adk-python.git
 pydantic==2.10.3
-google-genai
-google-cloud-aiplatform
-pandas
-numpy
+python-dotenv==1.0.1
+
+# --- Production Server (DEPLOYMENT.md) ---
+gunicorn==23.0.0
+
+# --- Google AI & Cloud ---
+# Note: We anchor versions to prevent breakages due to API updates
+google-genai==0.3.0
+google-cloud-aiplatform==1.73.0
+
+# --- Google ADK (Bleeding Edge) ---
+# We installed it from Git, but ideally you should use a commit hash if you're looking for complete stability.
+# For now, we'll leave it as is, knowing that it's a library under active development.
+git+https://github.com/google/adk-python.git
+
+# --- Data Processing ---
+# Pandas and Numpy are resource-intensive; it's best to fix the version so Docker doesn't unnecessarily reinstall gigabytes.
+pandas==2.2.3
+numpy==2.1.3
+
+# --- Testing (Optional, but recommended if you run tests in CI/CD) ---
+pytest==8.3.3
+httpx==0.27.2
