@@ -1,37 +1,50 @@
-# Use Python 3.11 (more stable than 3.13 for Google ADK)
-FROM python:3.11-slim
+# ---------------------------
+# Stage 1: Builder (Compilation)
+# ---------------------------
+FROM python:3.11-slim as builder
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# We installed git and the necessary compilation tools (gcc) for some libraries.
 RUN apt-get update && apt-get install -y \
     git \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for caching
+# We copy and compile the dependencies
 COPY requirements.txt .
+# We installed it in a local path (--user) to make copying easier later
+RUN pip install --user --no-cache-dir -r requirements.txt
 
-# Install Google ADK first - let it resolve its own dependencies
-RUN pip install --no-cache-dir git+https://github.com/google/adk-python.git
+# ---------------------------
+# Stage 2: Runner (Light Running)
+# ---------------------------
+FROM python:3.11-slim
 
-# Install remaining dependencies, allowing pip to resolve conflicts
-RUN pip install --no-cache-dir \
-    python-dotenv==1.0.1 \
-    google-genai \
-    google-cloud-aiplatform \
-    pandas \
-    numpy
+WORKDIR /app
 
-# Copy application code
+# We copy the libraries installed from the 'builder' stage
+# This leaves behind 'git', 'gcc', and all the compilation junk
+COPY --from=builder /root/.local /root/.local
+
+# We ensure that Python finds the libraries
+ENV PATH=/root/.local/bin:$PATH
+
+# We copy the source code
 COPY . .
 
-# Expose port
-EXPOSE 8080
-
-# Set environment variables
+# Environment Configuration
 ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 
-# Run the application with uvicorn (already installed by google-adk)
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT}
+# Security: Create a non-root user
+RUN useradd -m appuser && chown -R appuser /app
+USER appuser
+
+# We are showcasing the port
+EXPOSE 8080
+
+# Professional startup command (Gunicorn + Uvicorn)
+# We use main:app because the Dockerfile is inside backend/
+CMD ["gunicorn", "-k", "uvicorn.workers.UvicornWorker", "main:app", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "8", "--timeout", "0"]
