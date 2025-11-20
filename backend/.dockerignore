@@ -1,5 +1,13 @@
-# Python
-__pycache__/
+# --- Security (CRITICAL) ---
+.env
+.env.local
+.env.*
+*.json
+!package.json  
+
+# --- Python ---
+__pycache__
+*/__pycache__
 *.py[cod]
 *$py.class
 *.so
@@ -9,28 +17,32 @@ venv/
 .venv/
 ENV/
 
-# IDEs
+# --- IDEs & OS ---
 .vscode/
 .idea/
 *.swp
 *.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Git
+# --- Git ---
 .git/
 .gitignore
 
-# Database files (will be created at runtime)
+# --- Database & Local Data ---
 *.db
+*.sqlite
+*.sqlite3
+data/
+persist/
 
-# Documentation
+# --- Documentation & Tests ---
 *.md
 docs/
-
-# Test files
 tests/
 test_*.py
 *_test.py
+
+# --- Docker (Meta) ---
+Dockerfile
+.dockerignore
