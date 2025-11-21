@@ -8,7 +8,6 @@ python-dotenv
 gunicorn
 
 # --- Google AI & Cloud ---
-# Quitamos versiones para evitar conflictos con el ADK
 google-genai
 google-cloud-aiplatform
 
@@ -22,3 +21,7 @@ numpy
 # --- Testing ---
 pytest
 httpx
+
+# --- Conflict Resolution (Streamlit Compatibility) ---
+protobuf<6.0.0
+watchdog<6.0.0
