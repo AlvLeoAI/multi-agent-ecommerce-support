@@ -63,7 +63,7 @@ def main():
         )
     
     with col2:
-        avg_time = summary.get("avg_response_time", 0)
+        avg_time = summary.get("avg_response_time") or 0.0
         st.metric(
             label="Avg Response Time",
             value=f"{avg_time:.2f}s",
@@ -71,7 +71,7 @@ def main():
         )
     
     with col3:
-        success_rate = summary.get("success_rate", 0)
+        success_rate = summary.get("success_rate") or 0.0
         st.metric(
             label="Success Rate",
             value=f"{success_rate:.1f}%",
@@ -79,7 +79,7 @@ def main():
         )
     
     with col4:
-        avg_tokens = summary.get("avg_tokens", 0)
+        avg_tokens = summary.get("avg_tokens") or 0.0
         st.metric(
             label="Avg Tokens/Conv",
             value=f"{avg_tokens:.0f}",
