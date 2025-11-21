@@ -23,5 +23,5 @@ pytest
 httpx
 
 # --- Conflict Resolution (Streamlit Compatibility) ---
-protobuf<6.0.0
-watchdog<6.0.0
+protobuf
+watchdog
