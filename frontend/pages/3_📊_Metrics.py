@@ -95,9 +95,9 @@ def main():
         # Response Time Gauge
         st.markdown("### ⏱️ Response Time Performance")
         
-        avg_time = summary.get("avg_response_time", 0)
-        min_time = summary.get("min_response_time", 0)
-        max_time = summary.get("max_response_time", 0)
+        avg_time = summary.get("avg_response_time") or 0.0
+        min_time = summary.get("min_response_time") or 0.0
+        max_time = summary.get("max_response_time") or 0.0
         
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number+delta",
