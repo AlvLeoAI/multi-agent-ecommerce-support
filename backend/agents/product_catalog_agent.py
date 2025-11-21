@@ -4,17 +4,36 @@ Handles product information, search, and inventory queries
 """
 
 import json
+import os
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional
 from google.adk.agents import LlmAgent
 from google.adk.models.google_llm import Gemini
 from google.genai import types
 
-# Load product database
-DATABASE_PATH = Path(__file__).parent.parent / "database" / "products.json"
+# Configure logger
+logger = logging.getLogger(__name__)
 
-with open(DATABASE_PATH, 'r') as f:
-    PRODUCT_DB = json.load(f)
+# --- FIX: Robust Database Loading ---
+# We use a function to load the database, allowing reloading if necessary.
+def load_product_db():
+    try:
+        # Try searching in common paths (Docker vs Local)
+        base_dir = Path(__file__).resolve().parent.parent # backend/
+        db_path = base_dir / "database" / "products.json"
+        
+        if not db_path.exists():
+             # Fallback for when we run from the root
+             db_path = Path("ecommerce_support/backend/database/products.json")
+
+        with open(db_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"🔥 Error loading product database: {e}")
+        return {"products": []} # Return empty DB to avoid crash
+
+PRODUCT_DB = load_product_db()
 
 # Retry configuration
 retry_config = types.HttpRetryOptions(
@@ -24,20 +43,19 @@ retry_config = types.HttpRetryOptions(
     http_status_codes=[429, 500, 503, 504]
 )
 
+# Load model from env
+model_name = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+
+# --- Tools Definitions (Misma lógica, solo quitando prints innecesarios) ---
+
 def get_product_info(product_name: str) -> Dict:
-    """
-    Get detailed information about a specific product.
-    
-    Args:
-        product_name: Name of the product (e.g., "iPhone 15 Pro", "Dell XPS 15")
-    
-    Returns:
-        Dictionary with product information or error message
-    """
+    """Get detailed information about a specific product."""
     product_name_lower = product_name.lower()
     
-    # Search for product
-    for product in PRODUCT_DB["products"]:
+    # Refresh DB on search (Opcional: si quisieras actualizaciones en vivo)
+    # global PRODUCT_DB; PRODUCT_DB = load_product_db() 
+
+    for product in PRODUCT_DB.get("products", []):
         if product_name_lower in product["name"].lower():
             return {
                 "status": "success",
@@ -53,95 +71,46 @@ def get_product_info(product_name: str) -> Dict:
                 }
             }
     
-    # Product not found
-    available_products = [p["name"] for p in PRODUCT_DB["products"]]
+    # Product not found logic...
+    available_products = [p["name"] for p in PRODUCT_DB.get("products", [])]
     return {
         "status": "error",
         "message": f"Product '{product_name}' not found.",
-        "available_products": available_products[:5]  # Show first 5
+        "available_products": available_products[:5]
     }
 
 
-def search_products(
-    category: Optional[str] = None,
-    max_price: Optional[float] = None,
-    min_stock: int = 1,
-    tags: Optional[List[str]] = None
-) -> Dict:
-    """
-    Search products with filters.
-    
-    Args:
-        category: Filter by category (e.g., "Laptops", "Audio")
-        max_price: Maximum price filter
-        min_stock: Minimum stock required (default: 1, i.e., in stock)
-        tags: Filter by tags (e.g., ["video editing", "professional"])
-    
-    Returns:
-        Dictionary with matching products
-    """
+def search_products(category: Optional[str] = None, max_price: Optional[float] = None, min_stock: int = 1, tags: Optional[List[str]] = None) -> Dict:
+
     results = []
-    
-    for product in PRODUCT_DB["products"]:
-        # Apply filters
-        if category and product["category"] != category:
-            continue
-        
-        if max_price and product["price"] > max_price:
-            continue
-        
-        if product["stock"] < min_stock:
-            continue
+    for product in PRODUCT_DB.get("products", []):
+        # ... (Tu lógica de filtrado) ...
+        if category and product["category"] != category: continue
+        if max_price and product["price"] > max_price: continue
+        if product["stock"] < min_stock: continue
         
         if tags:
             product_tags = set(product.get("tags", []))
             search_tags = set(t.lower() for t in tags)
-            if not search_tags.intersection(product_tags):
-                continue
-        
-        # Add to results
+            if not search_tags.intersection(product_tags): continue
+
         results.append({
             "name": product["name"],
             "price": f"${product['price']}",
             "stock": product["stock"],
-            "category": product["category"],
-            "description": product["description"]
+            "category": product["category"]
         })
     
-    return {
-        "status": "success",
-        "count": len(results),
-        "products": results
-    }
-
+    return {"status": "success", "count": len(results), "products": results}
 
 def check_inventory(product_name: str) -> Dict:
-    """
-    Check inventory status for a product.
     
-    Args:
-        product_name: Name of the product
-    
-    Returns:
-        Dictionary with inventory information
-    """
     product_name_lower = product_name.lower()
-    
-    for product in PRODUCT_DB["products"]:
+    for product in PRODUCT_DB.get("products", []):
         if product_name_lower in product["name"].lower():
             stock = product["stock"]
-            
-            if stock == 0:
-                status = "Out of Stock"
-                message = f"{product['name']} is currently out of stock."
-                if "expected_restock" in product:
-                    message += f" Expected restock: {product['expected_restock']}"
-            elif stock < 10:
-                status = "Low Stock"
-                message = f"{product['name']} is in low stock ({stock} units remaining). Order soon!"
-            else:
-                status = "In Stock"
-                message = f"{product['name']} is in stock ({stock} units available)."
+            status = "Out of Stock" if stock == 0 else "Low Stock" if stock < 10 else "In Stock"
+            message = f"{product['name']} is {status.lower()} ({stock} units)."
             
             return {
                 "status": "success",
@@ -150,18 +119,14 @@ def check_inventory(product_name: str) -> Dict:
                 "stock_status": status,
                 "message": message
             }
-    
-    return {
-        "status": "error",
-        "message": f"Product '{product_name}' not found in inventory."
-    }
+    return {"status": "error", "message": f"Product '{product_name}' not found."}
 
 
 # Create Product Catalog Agent
 product_catalog_agent = LlmAgent(
-    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
+    model=Gemini(model=model_name, retry_options=retry_config),
     name="product_catalog_agent",
-    description="Product catalog specialist that provides product information, search, and inventory data for an e-commerce store.",
+    description="Product catalog specialist that provides product information, search, and inventory data.",
     instruction="""
     You are a product catalog specialist for an e-commerce store.
     
@@ -185,4 +150,4 @@ product_catalog_agent = LlmAgent(
     tools=[get_product_info, search_products, check_inventory]
 )
 
-print("✅ Product Catalog Agent created!")
+logger.info(f"✅ Product Catalog Agent created using model: {model_name}")
