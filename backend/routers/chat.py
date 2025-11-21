@@ -189,7 +189,9 @@ Current user message: {user_query}
 
         # Count steps (turns in the conversation)
         try:
-            steps_count = len(adk_response_turns)
+            steps_count = len(adk_response_turns) 
+        except:
+            steps_count = 1
 
 
 
