@@ -4,12 +4,17 @@ Handles customer inquiries using Product Catalog Agent via A2A
 Includes Memory Bank for customer preferences
 """
 
+import os
+import logging
 from google.adk.agents import LlmAgent
 from google.adk.models.google_llm import Gemini
 from google.genai import types
 from .product_catalog_agent import product_catalog_agent
 
-# Retry configuration
+# Configure logger for this module
+logger = logging.getLogger(__name__)
+
+# Retry configuration - Production Grade 🛡️
 retry_config = types.HttpRetryOptions(
     attempts=5,
     exp_base=7,
@@ -17,9 +22,12 @@ retry_config = types.HttpRetryOptions(
     http_status_codes=[429, 500, 503, 504]
 )
 
+# Load model name from env or default to latest stable
+model_name = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+
 # Create Customer Support Agent
 customer_support_agent = LlmAgent(
-    model=Gemini(model="gemini-2.5-flash-lite", retry_options=retry_config),
+    model=Gemini(model=model_name, retry_options=retry_config),
     name="customer_support_agent",
     description="Friendly customer support assistant for e-commerce inquiries. Helps customers find products and provides purchase recommendations.",
     instruction="""
@@ -63,8 +71,7 @@ customer_support_agent = LlmAgent(
     - Suggest alternatives when needed
     - Remember what the customer is looking for
     """,
-    sub_agents=[product_catalog_agent]  # Use Product Catalog as sub-agent!
+    sub_agents=[product_catalog_agent]  # Delegation happens here 🤝
 )
 
-print("✅ Customer Support Agent created!")
-print("   Integrated with Product Catalog Agent via sub-agents")
+logger.info(f"✅ Customer Support Agent created using model: {model_name}")
