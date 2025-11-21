@@ -9,7 +9,7 @@ gunicorn==23.0.0
 
 # --- Google AI & Cloud ---
 # Note: We anchor versions to prevent breakages due to API updates
-google-genai==1.2.0
+google-genai==1.46.0
 google-cloud-aiplatform==1.128.0
 
 # --- Google ADK (Bleeding Edge) ---
