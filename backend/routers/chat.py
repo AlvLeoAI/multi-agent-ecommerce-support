@@ -4,9 +4,6 @@ Tracks response time, tokens, steps, and success rate for each conversation
 """
 
 import os
-
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-
 from fastapi import APIRouter, HTTPException
 from typing import Dict
 import uuid
@@ -38,7 +35,7 @@ from database.quality_tracker import QualityTracker, estimate_tokens
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
 # Model Configuration
-MODEL_NAME = "gemini-2.0-flash-exp"
+MODEL_NAME = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
 
 retry_config = types.HttpRetryOptions(
     attempts=5,
@@ -46,6 +43,7 @@ retry_config = types.HttpRetryOptions(
     initial_delay=1,
     http_status_codes=[429, 500, 503, 504],
 )
+
 
 gemini_model = Gemini(model=MODEL_NAME, retry_options=retry_config)
 
@@ -67,12 +65,10 @@ def escalate_to_human_support(question: str) -> Dict:
 escalate_tool = FunctionTool(func=escalate_to_human_support)
 
 
-# --- Agents ---
 general_agent = Agent(
     name="GeneralAgent",
     model=gemini_model,
     instruction="You are a friendly customer support agent. Handle greetings and general questions.",
-    api_key=GOOGLE_API_KEY,
     tools=[escalate_tool],
 )
 
@@ -80,7 +76,6 @@ product_agent = Agent(
     name="ProductAgent",
     model=gemini_model,
     instruction="You are a product expert. Use google_search to find real products.",
-    api_key=GOOGLE_API_KEY,
     tools=[google_search],
 )
 
@@ -88,7 +83,6 @@ calculation_agent = Agent(
     name="CalculationAgent",
     model=gemini_model,
     instruction="You are a calculator. Perform math calculations accurately.",
-    api_key=GOOGLE_API_KEY,
     code_executor=BuiltInCodeExecutor(),
 )
 
@@ -100,7 +94,6 @@ coordinator_agent = Agent(
     - ProductAgent: Product searches
     - CalculationAgent: Math calculations
     """,
-    api_key=GOOGLE_API_KEY,
     tools=[
         AgentTool(agent=general_agent),
         AgentTool(agent=product_agent),
@@ -108,6 +101,7 @@ coordinator_agent = Agent(
         escalate_tool,
     ],
 )
+
 
 chat_runner = InMemoryRunner(agent=coordinator_agent)
 logging.info("ADK Multi-Agent Runner with SQLite Memory Initialized")
@@ -164,6 +158,7 @@ Current user message: {user_query}
 """
         
         # Create a new coordinator with memory context
+        
         coordinator_with_memory = Agent(
             name="CoordinatorAgent",
             model=gemini_model,
@@ -180,139 +175,21 @@ Current user message: {user_query}
         temp_runner = InMemoryRunner(agent=coordinator_with_memory)
         
         # Run the coordinator
-        adk_response_turns = await temp_runner.run_debug(
-            user_query,
-            session_id=session_id
+        adk_response_turns = await temp_runner.run(
+            user_query
         )
         
-        agent_response = adk_response_turns[-1].content.parts[0].text
+        # Extract text from response
         
+        try:
+            agent_response = adk_response_turns[-1].content.parts[0].text
+        except:
+             
+             agent_response = str(adk_response_turns)
+
         # Count steps (turns in the conversation)
-        steps_count = len(adk_response_turns)
-        
-        # Estimate tokens
-        total_text = user_query + agent_response
-        tokens_used = estimate_tokens(total_text)
-        
-        # Save to database
-        save_message(session_id, "user", user_query, user_id)
-        save_message(session_id, "assistant", agent_response, user_id)
-        
-        # Track quality metrics
-        response_time = time.time() - start_time
-        quality_tracker.track_conversation(
-            conversation_id=session_id,
-            response_time=response_time,
-            tokens_used=tokens_used,
-            steps_count=steps_count,
-            agent_used=agent_used,
-            success=success,
-            error_occurred=error_occurred
-        )
-        
-        logging.info(f"Quality tracked: {response_time:.2f}s, {tokens_used} tokens, {steps_count} steps")
-        
-        return ChatResponse(
-            response=agent_response,
-            session_id=session_id,
-            user_id=user_id
-        )
-        
-    except Exception as e:
-        # Track error
-        error_occurred = True
-        success = False
-        response_time = time.time() - start_time
-        
-        quality_tracker.track_conversation(
-            conversation_id=session_id if 'session_id' in locals() else f"error_{uuid.uuid4().hex[:8]}",
-            response_time=response_time,
-            tokens_used=0,
-            steps_count=0,
-            agent_used=agent_used,
-            success=success,
-            error_occurred=error_occurred
-        )
-        
-        logging.error(f"Error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/sessions/{session_id}")
-async def get_session(session_id: str) -> Dict:
-    """Get session history from database"""
-    history = get_session_history(session_id)
-    return {
-        "session_id": session_id,
-        "history": history,
-        "message_count": len(history)
-    }
-
-
-@router.get("/users/{user_id}/sessions")
-async def get_user_session_list(user_id: str) -> Dict:
-    """Get all sessions for a user"""
-    sessions = get_user_sessions(user_id)
-    return {
-        "user_id": user_id,
-        "sessions": sessions,
-        "total": len(sessions)
-    }
-
-
-@router.delete("/sessions/{session_id}")
-async def delete_session_endpoint(session_id: str) -> Dict:
-    """Delete a session"""
-    delete_session(session_id)
-    return {"status": "deleted", "session_id": session_id}
-
-
-@router.get("/metrics")
-async def get_metrics() -> Dict:
-    """Get chat metrics from database"""
-    return get_chat_metrics()
-
-
-@router.get("/quality-metrics")
-async def get_quality_metrics(days: int = 7) -> Dict:
-    """
-    Get quality metrics summary
-    
-    Args:
-        days: Number of days to look back (default: 7)
-        
-    Returns:
-        Dict with summary, by_agent, and trends data
-    """
-    try:
-        summary = quality_tracker.get_metrics_summary(days=days)
-        by_agent = quality_tracker.get_metrics_by_agent(days=days)
-        trends = quality_tracker.get_trends(days=days)
-        
-        return {
-            "summary": summary,
-            "by_agent": by_agent.to_dict('records') if not by_agent.empty else [],
-            "trends": trends.to_dict('records') if not trends.empty else []
-        }
-    except Exception as e:
-        logging.error(f"Error getting quality metrics: {str(e)}")
-        return {"error": str(e)}
-
-
-@router.post("/users/{user_id}/preferences")
-async def save_preferences(user_id: str, preferences: Dict) -> Dict:
-    """Save user preferences"""
-    save_user_preference(user_id, preferences)
-    return {"status": "saved", "user_id": user_id}
-
-
-@router.get("/users/{user_id}/preferences")
-async def get_preferences(user_id: str) -> Dict:
-    """Get user preferences"""
-    prefs = get_user_preferences(user_id)
-    return {"user_id": user_id, "preferences": prefs or {}}
-
-
+        try:
+            steps_count = len(adk_response_turns
 
 
 
