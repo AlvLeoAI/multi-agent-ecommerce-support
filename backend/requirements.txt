@@ -10,7 +10,7 @@ gunicorn==23.0.0
 # --- Google AI & Cloud ---
 # Note: We anchor versions to prevent breakages due to API updates
 google-genai==0.3.0
-google-cloud-aiplatform==1.73.0
+google-cloud-aiplatform==1.128.0
 
 # --- Google ADK (Bleeding Edge) ---
 # We installed it from Git, but ideally you should use a commit hash if you're looking for complete stability.
