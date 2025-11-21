@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 # API Configuration
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = "https://ecommerce-agent-backend-89106065348.southamerica-east1.run.app"
 
 def fetch_quality_metrics(days=7):
     """Fetch quality metrics from API"""
