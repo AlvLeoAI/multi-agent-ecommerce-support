@@ -130,8 +130,8 @@ def main():
         # Success Rate Gauge
         st.markdown("### ✅ Success Rate")
         
-        success_rate = summary.get("success_rate", 0)
-        error_rate = summary.get("error_rate", 0)
+        success_rate = summary.get("success_rate") or 0.0
+        error_rate = summary.get("error_rate") or 0.0
         
         fig_success = go.Figure(go.Indicator(
             mode="gauge+number",
