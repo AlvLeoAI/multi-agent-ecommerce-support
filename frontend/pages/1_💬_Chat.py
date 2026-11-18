@@ -3,7 +3,9 @@ Chat Page - Customer Support Chat Interface
 Real-time conversation with the Multi-Agent Support System
 """
 
+import html
 import sys
+import uuid
 from pathlib import Path
 
 import streamlit as st
@@ -17,11 +19,12 @@ from utils.api_client import api_client
 st.set_page_config(
     page_title="Chat - E-Commerce Support",
     page_icon="💬",
-    layout="wide"
+    layout="wide",
 )
 
 # Custom CSS
-st.markdown("""
+st.markdown(
+    """
     <style>
     .chat-message {
         padding: 1rem;
@@ -50,7 +53,9 @@ st.markdown("""
         font-weight: bold;
     }
     </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # Page header
 st.title("💬 Customer Support Chat")
@@ -61,7 +66,6 @@ if "messages" not in st.session_state:
     st.session_state.messages = []
 
 if "session_id" not in st.session_state:
-    import uuid
     st.session_state.session_id = f"streamlit_{uuid.uuid4().hex[:8]}"
 
 # Sidebar with info
@@ -69,102 +73,114 @@ with st.sidebar:
     st.subheader("💡 Chat Info")
     st.info(f"**Session ID:** {st.session_state.session_id}")
     st.metric("Messages", len(st.session_state.messages))
-    
+
     st.markdown("---")
-    
+
     st.subheader("✨ Try asking:")
-    st.markdown("""
+    st.markdown(
+        """
     - *"I need a laptop for video editing under $1500"*
     - *"Do you have the iPhone 15 Pro?"*
     - *"Compare Dell XPS 15 vs MacBook Pro"*
     - *"What headphones do you recommend for work?"*
-    """)
-    
+    """
+    )
+
     st.markdown("---")
-    
+
     if st.button("🗑️ Clear Chat History", use_container_width=True):
         st.session_state.messages = []
-        # Generate new session ID
-        import uuid
         st.session_state.session_id = f"streamlit_{uuid.uuid4().hex[:8]}"
         st.rerun()
 
-# Display chat messages
+# Display chat messages with HTML escaping to prevent XSS
 for message in st.session_state.messages:
     role = message["role"]
-    content = message["content"]
-    
+    safe_content = html.escape(str(message.get("content", "")))
+
     if role == "user":
-        st.markdown(f"""
+        st.markdown(
+            f"""
             <div class="chat-message user-message">
                 <div class="message-label">👤 You</div>
-                <div class="message-content">{content}</div>
+                <div class="message-content">{safe_content}</div>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
     else:
-        st.markdown(f"""
+        st.markdown(
+            f"""
             <div class="chat-message assistant-message">
                 <div class="message-label">🤖 Support Agent</div>
-                <div class="message-content">{content}</div>
+                <div class="message-content">{safe_content}</div>
             </div>
-        """, unsafe_allow_html=True)
+        """,
+            unsafe_allow_html=True,
+        )
 
 # Chat input
 user_input = st.chat_input("Type your message here...", key="chat_input")
 
 if user_input:
-    # Add user message to chat history
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
-    
-    # Show user message immediately
-    st.markdown(f"""
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": user_input,
+        }
+    )
+
+    safe_user_input = html.escape(str(user_input))
+    st.markdown(
+        f"""
         <div class="chat-message user-message">
             <div class="message-label">👤 You</div>
-            <div class="message-content">{user_input}</div>
+            <div class="message-content">{safe_user_input}</div>
         </div>
-    """, unsafe_allow_html=True)
-    
-    # Show loading spinner while waiting for response
+    """,
+        unsafe_allow_html=True,
+    )
+
     with st.spinner("🤖 Support Agent is thinking..."):
-        # Call backend API
         response = api_client.send_message(
             message=user_input,
             user_id="streamlit_user",
-            session_id=st.session_state.session_id
+            session_id=st.session_state.session_id,
         )
-    
-    # Check for errors
+
     if "error" in response and response["error"]:
         st.error(f"❌ Error: {response.get('message', 'Unknown error')}")
         st.info("💡 Make sure the backend is running on http://localhost:8000")
     else:
-        # Add assistant response to chat history
-        assistant_message = response.get("response", "I apologize, but I couldn't process your request.")
-        
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": assistant_message
-        })
-        
-        # Rerun to show the new message
+        assistant_message = response.get(
+            "response",
+            "I apologize, but I couldn't process your request.",
+        )
+
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": assistant_message,
+            }
+        )
+
         st.rerun()
 
 # Show helpful message if no messages yet
 if len(st.session_state.messages) == 0:
-    st.info("👋 **Welcome!** Start a conversation by typing a message below. Ask me about products, pricing, availability, or anything else!")
-    
-    # Quick action buttons
+    st.info(
+        "👋 **Welcome!** Start a conversation by typing a message below. "
+        "Ask me about products, pricing, availability, or anything else!"
+    )
+
     st.markdown("### 🚀 Quick Start")
     col1, col2 = st.columns(2)
-    
+
     with col1:
         if st.button("💻 Ask about laptops", use_container_width=True):
             st.session_state.temp_message = "I need a laptop for video editing under $1500"
             st.rerun()
-    
+
     with col2:
         if st.button("📱 Ask about phones", use_container_width=True):
             st.session_state.temp_message = "Do you have the iPhone 15 Pro in stock?"
@@ -174,34 +190,31 @@ if len(st.session_state.messages) == 0:
 if "temp_message" in st.session_state:
     user_input = st.session_state.temp_message
     del st.session_state.temp_message
-    
-    # Add user message
-    st.session_state.messages.append({
-        "role": "user",
-        "content": user_input
-    })
-    
-    # Get response
+
+    st.session_state.messages.append(
+        {
+            "role": "user",
+            "content": user_input,
+        }
+    )
+
     with st.spinner("🤖 Support Agent is thinking..."):
         response = api_client.send_message(
             message=user_input,
             user_id="streamlit_user",
-            session_id=st.session_state.session_id
+            session_id=st.session_state.session_id,
         )
-    
+
     if "error" not in response or not response["error"]:
-        assistant_message = response.get("response", "I apologize, but I couldn't process your request.")
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": assistant_message
-        })
-    
+        assistant_message = response.get(
+            "response",
+            "I apologize, but I couldn't process your request.",
+        )
+        st.session_state.messages.append(
+            {
+                "role": "assistant",
+                "content": assistant_message,
+            }
+        )
+
     st.rerun()
-
-
-
-
-
-
-
-

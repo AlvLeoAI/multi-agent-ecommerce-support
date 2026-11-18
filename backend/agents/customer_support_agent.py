@@ -23,7 +23,7 @@ retry_config = types.HttpRetryOptions(
     http_status_codes=[429, 500, 503, 504],
 )
 
-model_name = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+model_name = os.getenv("AGENT_MODEL", "gemini-2.5-flash")
 
 CUSTOMER_SUPPORT_INSTRUCTION = """You are a professional customer support assistant for an e-commerce store.
 

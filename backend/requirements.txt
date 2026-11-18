@@ -7,24 +7,14 @@ python-dotenv==1.2.4
 # --- Production Server ---
 gunicorn==27.0.1
 
-# --- Google AI & Cloud ---
+# --- Google AI & ADK ---
 google-genai==2.34.0
-google-cloud-aiplatform==2.10.0
-
-# --- Google ADK ---
 google-adk==2.14.1
 
-# --- Data ---
+# --- Data & Telemetry ---
 pandas==3.1.1
 numpy==2.4.6
 
-# --- Testing & Linting ---
-pytest==9.2.0
-pytest-asyncio==1.5.0
+# --- HTTP Client & Protobuf ---
 httpx==0.28.1
-ruff==0.17.5
-
-# --- Conflict Resolution (Streamlit Compatibility) ---
 protobuf==7.36.2
-watchdog==6.0.0
-plotly==7.1.0

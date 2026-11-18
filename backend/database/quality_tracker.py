@@ -1,48 +1,67 @@
 """
 QualityTracker Database & Telemetry Layer.
 Tracks response time, token usage, step counts, delegated specialist agent,
-and success/error rates using parameterized SQLite queries and NaN-safe aggregates.
+and success/error rates using parameterized SQLite queries, connection hygiene,
+and NaN-safe aggregates.
 """
 
 from __future__ import annotations
 
+import contextlib
+import os
 import sqlite3
+from collections.abc import Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
+
+_CANDIDATE_ROOT = Path(__file__).resolve().parent.parent.parent
+if _CANDIDATE_ROOT == Path("/") or not os.access(_CANDIDATE_ROOT, os.W_OK):
+    _DEFAULT_ROOT = Path(__file__).resolve().parent.parent
+else:
+    _DEFAULT_ROOT = _CANDIDATE_ROOT
+
+DEFAULT_QUALITY_DB_PATH = os.getenv("QUALITY_DB_PATH", str(_DEFAULT_ROOT / "ecommerce_agent.db"))
 
 
 class QualityTracker:
     """Track agent quality metrics in SQLite with parameterized queries and NaN-safe summaries."""
 
-    def __init__(self, db_path: str = "ecommerce_agent.db") -> None:
-        self.db_path = db_path
+    def __init__(self, db_path: str | Path | None = None) -> None:
+        self.db_path = str(db_path) if db_path is not None else DEFAULT_QUALITY_DB_PATH
         self.setup_database()
+
+    @contextlib.contextmanager
+    def _get_connection(self) -> Iterator[sqlite3.Connection]:
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute("PRAGMA foreign_keys = ON")
+            conn.execute("PRAGMA busy_timeout = 5000")
+            yield conn
+        finally:
+            conn.close()
 
     def setup_database(self) -> None:
         """Create quality metrics table if it doesn't exist."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS quality_metrics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                conversation_id TEXT NOT NULL,
-                response_time REAL NOT NULL,
-                tokens_used INTEGER,
-                steps_count INTEGER NOT NULL,
-                agent_used TEXT,
-                success BOOLEAN DEFAULT 1,
-                user_rating INTEGER,
-                error_occurred BOOLEAN DEFAULT 0,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (conversation_id) REFERENCES conversation_history(conversation_id)
-            )
-        """)
-
-        conn.commit()
-        conn.close()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS quality_metrics (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    conversation_id TEXT NOT NULL,
+                    response_time REAL NOT NULL,
+                    tokens_used INTEGER,
+                    steps_count INTEGER NOT NULL,
+                    agent_used TEXT,
+                    success BOOLEAN DEFAULT 1,
+                    user_rating INTEGER,
+                    error_occurred BOOLEAN DEFAULT 0,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
 
     def track_conversation(
         self,
@@ -55,8 +74,7 @@ class QualityTracker:
         error_occurred: bool = False,
     ) -> None:
         """Track a single conversation turn's quality metrics."""
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with self._get_connection() as conn:
             cursor = conn.cursor()
             utc_timestamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S")
             cursor.execute(
@@ -78,13 +96,10 @@ class QualityTracker:
                 ),
             )
             conn.commit()
-        finally:
-            conn.close()
 
     def save_user_rating(self, conversation_id: str, rating: int) -> None:
         """Save user rating (1 for thumbs up, 0 for thumbs down)."""
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -100,13 +115,10 @@ class QualityTracker:
                 (int(rating), conversation_id),
             )
             conn.commit()
-        finally:
-            conn.close()
 
     def get_metrics_summary(self, days: int = 7) -> dict[str, Any]:
         """Get aggregated metrics for the last N days with parameterized SQL and NaN sanitization."""
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with self._get_connection() as conn:
             window_modifier = f"-{int(days)} days"
             query = """
                 SELECT
@@ -125,8 +137,6 @@ class QualityTracker:
                 WHERE timestamp >= datetime('now', ?)
             """
             df = pd.read_sql(query, conn, params=(window_modifier,))
-        finally:
-            conn.close()
 
         if df.empty:
             return {
@@ -157,8 +167,7 @@ class QualityTracker:
 
     def get_metrics_by_agent(self, days: int = 7) -> pd.DataFrame:
         """Get metrics broken down by agent type using parameterized SQL."""
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with self._get_connection() as conn:
             window_modifier = f"-{int(days)} days"
             query = """
                 SELECT
@@ -173,13 +182,10 @@ class QualityTracker:
                 ORDER BY conversations DESC
             """
             return pd.read_sql(query, conn, params=(window_modifier,))
-        finally:
-            conn.close()
 
     def get_trends(self, days: int = 7) -> pd.DataFrame:
         """Get daily trends for charts using parameterized SQL."""
-        conn = sqlite3.connect(self.db_path)
-        try:
+        with self._get_connection() as conn:
             window_modifier = f"-{int(days)} days"
             query = """
                 SELECT
@@ -194,8 +200,6 @@ class QualityTracker:
                 ORDER BY date
             """
             return pd.read_sql(query, conn, params=(window_modifier,))
-        finally:
-            conn.close()
 
 
 def estimate_tokens(text: str) -> int:

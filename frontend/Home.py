@@ -10,7 +10,7 @@ st.set_page_config(
     page_title="E-Commerce Support System",
     page_icon="🛍️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # Main header
@@ -137,15 +137,12 @@ with st.expander("🔧 Technical Details"):
 
 # Footer
 st.markdown("---")
-st.markdown("""
+st.markdown(
+    """
 <div style='text-align: center; color: gray;'>
     <p>Built with ❤️ using Google ADK, FastAPI, and Streamlit</p>
     <p>© 2025 E-Commerce Support System</p>
 </div>
-""", unsafe_allow_html=True)
-
-
-
-
-
-
+""",
+    unsafe_allow_html=True,
+)

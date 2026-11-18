@@ -3,13 +3,13 @@
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/Backend-FastAPI_0.163-009688?logo=fastapi&logoColor=white)
 ![Google ADK](https://img.shields.io/badge/Orchestration-Google_ADK_2.14-4285F4?logo=google&logoColor=white)
-![Tests](https://img.shields.io/badge/Pytest-48_Passed_%7C_0_XFail-2ea44f)
+![Tests](https://img.shields.io/badge/Pytest-66_Passed_%7C_0_XFail-2ea44f)
 ![Offline Eval](https://img.shields.io/badge/Offline_Eval-24%2F24_(100%25)-2ea44f)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 1. Executive Technical Summary
 
-`multi-agent-ecommerce-support` is the commercial front-office and post-purchase dispute verification layer of a **Transactional AI & Agentic Payments** engineering portfolio. Built with **Google Agent Development Kit (ADK)**, **Gemini 2.0 Flash**, **FastAPI**, **Pydantic v2**, **SQLite**, and **Streamlit**, it coordinates specialized support agents for catalog discovery, deterministic cart quote calculation, order/payment evidence verification, and verifiable human escalation.
+`multi-agent-ecommerce-support` is the commercial front-office and post-purchase dispute verification layer of a **Transactional AI & Agentic Payments** engineering portfolio. Built with **Google Agent Development Kit (ADK)**, **Gemini 2.5 Flash**, **FastAPI**, **Pydantic v2**, **SQLite**, and **Streamlit**, it coordinates specialized support agents for catalog discovery, deterministic cart quote calculation, order/payment evidence verification, and verifiable human escalation.
 
 ### Core Architectural Invariant
 
@@ -95,7 +95,7 @@ All tests and evaluation suites run **100% offline** with outbound TCP/UDP socke
 # 1. Static analysis & import formatting check
 uv run ruff check
 
-# 2. Full offline characterization, commerce, evidence & observability test suite (48 tests)
+# 2. Full offline characterization, commerce, evidence, observability & production hardening suite (66 tests)
 uv run pytest -v
 
 # 3. Standalone 24-case deterministic evaluation harness

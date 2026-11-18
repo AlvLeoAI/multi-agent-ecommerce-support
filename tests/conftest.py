@@ -1,12 +1,13 @@
 """
-Phase 0, Phase 1 & Phase 2 Offline Test Harness & Isolation Fixtures.
+Phase 0–4 Offline Test Harness & Isolation Fixtures.
 
 Enforces:
 1. 100% offline execution (`block_outbound_network` autouse fixture).
 2. Isolated temporary SQLite databases (`isolated_sqlite_dbs` autouse fixture)
    for chat memory, product catalog, discount codes, orders, payment/grant evidence,
    support tickets, and quality metrics.
-3. Deterministic Google ADK runner stubbing (`stub_adk_runner` fixture).
+3. Deterministic Google ADK 2.14.1 runner stubbing (`stub_adk_runner` fixture)
+   implementing `run_async(user_id=..., session_id=..., new_message=...)`.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ import socket
 import sqlite3
 import sys
 import tempfile
+from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -43,7 +45,7 @@ def _redirected_sqlite_connect(
     database: str | Path, *args: Any, **kwargs: Any
 ) -> sqlite3.Connection:
     db_str = str(database)
-    if db_str.endswith("my_agent_data.db") or db_str == "ecommerce_agent.db":
+    if db_str.endswith("my_agent_data.db") or db_str.endswith("ecommerce_agent.db"):
         redirected = Path(_IMPORT_TEMP_DIR.name) / Path(db_str).name
         return _ORIG_SQLITE_CONNECT(str(redirected), *args, **kwargs)
     return _ORIG_SQLITE_CONNECT(database, *args, **kwargs)
@@ -108,7 +110,7 @@ def isolated_sqlite_dbs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict
     monkeypatch.setattr(chat_memory, "DB_PATH", chat_db_path)
     monkeypatch.setattr(catalog_db, "DB_PATH", chat_db_path)
     monkeypatch.setattr(orders_db, "DB_PATH", chat_db_path)
-    chat_memory.init_chat_memory_db()
+    chat_memory.init_chat_memory_db(db_path=chat_db_path)
     catalog_db.init_catalog_db(db_path=chat_db_path)
     orders_db.init_orders_db(db_path=chat_db_path)
 
@@ -121,6 +123,17 @@ def isolated_sqlite_dbs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict
     }
 
 
+def _extract_message_text(new_message: Any) -> str:
+    if isinstance(new_message, str):
+        return new_message
+    parts = getattr(new_message, "parts", None)
+    if parts and isinstance(parts, (list, tuple)):
+        texts = [str(getattr(p, "text", "")) for p in parts if getattr(p, "text", None) is not None]
+        if texts:
+            return "\n".join(texts)
+    return str(new_message)
+
+
 class StubADKController:
     """Controller for inspecting captured ADK Agent configurations and configuring turn outputs."""
 
@@ -128,21 +141,39 @@ class StubADKController:
         self.instances: list[StubInMemoryRunner] = []
         self.last_agent: Any = None
         self.queries: list[str] = []
+        self.user_ids: list[str] = []
+        self.session_ids: list[str] = []
         self.response_text: str = "Stubbed deterministic agent response."
         self.custom_turns: Any = None
         self.raise_error: Exception | None = None
 
-    def make_turn(self, text: str) -> SimpleNamespace:
-        return SimpleNamespace(content=SimpleNamespace(parts=[SimpleNamespace(text=text)]))
+    def make_turn(
+        self, text: str, *, thought: bool = False, author: str | None = None
+    ) -> SimpleNamespace:
+        return SimpleNamespace(
+            author=author,
+            content=SimpleNamespace(parts=[SimpleNamespace(text=text, thought=thought)]),
+        )
 
 
 class StubInMemoryRunner:
-    """Deterministic offline replacement for `google.adk.runners.InMemoryRunner`."""
+    """
+    Deterministic offline replacement for `google.adk.runners.InMemoryRunner`
+    enforcing the real ADK 2.14.1 `run_async(user_id=..., session_id=..., new_message=...)` contract.
+    """
 
     controller: StubADKController
 
-    def __init__(self, agent: Any, *args: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        agent: Any = None,
+        *,
+        app_name: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         self.agent = agent
+        self.app_name = app_name
+        self.auto_create_session: bool = False
         self.name = getattr(agent, "name", None)
         self.instruction = getattr(agent, "instruction", None)
         self.tools = getattr(agent, "tools", None)
@@ -150,13 +181,35 @@ class StubInMemoryRunner:
         self.controller.instances.append(self)
         self.controller.last_agent = agent
 
-    async def run(self, user_query: str, *args: Any, **kwargs: Any) -> Any:
-        self.controller.queries.append(user_query)
+    def run(self, *args: Any, **kwargs: Any) -> Any:
+        raise TypeError(
+            "Runner.run() takes 1 positional argument but 2 were given; "
+            "use run_async(user_id=..., session_id=..., new_message=...)"
+        )
+
+    async def run_async(
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        new_message: Any,
+        **kwargs: Any,
+    ) -> AsyncIterator[Any]:
+        extracted_text = _extract_message_text(new_message)
+        self.controller.queries.append(extracted_text)
+        self.controller.user_ids.append(user_id)
+        self.controller.session_ids.append(session_id)
+
         if self.controller.raise_error is not None:
             raise self.controller.raise_error
-        if self.controller.custom_turns is not None:
-            return self.controller.custom_turns
-        return [self.controller.make_turn(self.controller.response_text)]
+
+        turns = (
+            self.controller.custom_turns
+            if self.controller.custom_turns is not None
+            else [self.controller.make_turn(self.controller.response_text)]
+        )
+        for turn in turns:
+            yield turn
 
 
 @pytest.fixture

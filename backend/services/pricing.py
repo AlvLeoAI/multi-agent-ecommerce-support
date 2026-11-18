@@ -10,7 +10,7 @@ Enforces the core architectural invariant:
 from __future__ import annotations
 
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -34,10 +34,34 @@ TAX_JURISDICTIONS: dict[str, Decimal] = {
     "EU-VAT": Decimal("0.20"),
 }
 
+_FORBIDDEN_PRICE_KEYS: set[str] = {
+    "unit_price",
+    "price",
+    "discount_percent",
+    "discount",
+    "tax_rate",
+    "total",
+}
+_ALLOWED_ITEM_KEYS: set[str] = {
+    "product_id",
+    "id",
+    "product_name",
+    "name",
+    "quantity",
+}
+
 
 def quantize_usd(amount: Decimal | str | int | float) -> Decimal:
-    """Quantize a monetary value to 2 decimal places using ROUND_HALF_UP."""
-    return Decimal(str(amount)).quantize(USD_QUANT, rounding=ROUND_HALF_UP)
+    """Quantize a finite monetary value to 2 decimal places using ROUND_HALF_UP."""
+    if isinstance(amount, bool):
+        raise ValueError(f"Monetary amount must be a finite number (got {amount!r})")
+    try:
+        dec = Decimal(str(amount))
+    except (InvalidOperation, ValueError, TypeError) as exc:
+        raise ValueError(f"Monetary amount must be a finite number (got {amount!r})") from exc
+    if not dec.is_finite():
+        raise ValueError(f"Monetary amount must be a finite number (got {amount!r})")
+    return dec.quantize(USD_QUANT, rounding=ROUND_HALF_UP)
 
 
 def usd_to_cents(amount: Decimal) -> int:
@@ -213,8 +237,8 @@ def calculate_quote(
             "message": "Cart items list cannot be empty.",
         }
 
-    # Validate tax jurisdiction first
-    normalized_jurisdiction = (tax_jurisdiction or "US-STANDARD").strip().upper()
+    raw_jur = str(tax_jurisdiction if tax_jurisdiction is not None else "US-STANDARD").strip()
+    normalized_jurisdiction = (raw_jur or "US-STANDARD").upper()
     if normalized_jurisdiction not in TAX_JURISDICTIONS:
         return {
             "status": "error",
@@ -224,7 +248,6 @@ def calculate_quote(
         }
     tax_rate = TAX_JURISDICTIONS[normalized_jurisdiction]
 
-    # Validate discount code if provided
     normalized_discount_code: str | None = None
     discount_percent = Decimal("0.00")
     max_discount_cents = 0
@@ -257,9 +280,7 @@ def calculate_quote(
             }
         max_discount_cents = int(disc_record["max_discount_cents"])
 
-    # Aggregate quantities per canonical product_id to prevent split-line stock bypass
     aggregated_quantities: dict[str, int] = {}
-    resolved_products: dict[str, dict[str, Any]] = {}
     line_items: list[QuoteLineItemModel] = []
 
     for raw_item in items:
@@ -270,8 +291,10 @@ def calculate_quote(
                 "message": "Each cart item must be a dictionary with 'product_id' and 'quantity'.",
             }
 
-        # Explicitly reject attempts to inject custom unit prices or discounts in item payloads
-        if any(k in raw_item for k in ("unit_price", "price", "discount_percent", "discount")):
+        normalized_item = {str(k).strip().lower(): v for k, v in raw_item.items()}
+        normalized_keys = set(normalized_item.keys())
+
+        if normalized_keys.intersection(_FORBIDDEN_PRICE_KEYS):
             return {
                 "status": "error",
                 "error_code": "UNAUTHORIZED_PRICE_OVERRIDE",
@@ -281,11 +304,19 @@ def calculate_quote(
                 ),
             }
 
+        if not normalized_keys.issubset(_ALLOWED_ITEM_KEYS):
+            unknown_keys = sorted(normalized_keys - _ALLOWED_ITEM_KEYS)
+            return {
+                "status": "error",
+                "error_code": "INVALID_ITEM_FORMAT",
+                "message": f"Unsupported fields in cart item: {unknown_keys}.",
+            }
+
         identifier = (
-            raw_item.get("product_id")
-            or raw_item.get("id")
-            or raw_item.get("product_name")
-            or raw_item.get("name")
+            normalized_item.get("product_id")
+            or normalized_item.get("id")
+            or normalized_item.get("product_name")
+            or normalized_item.get("name")
         )
         if not identifier or not str(identifier).strip():
             return {
@@ -294,7 +325,7 @@ def calculate_quote(
                 "message": "Each cart item must specify a non-empty 'product_id'.",
             }
 
-        qty = raw_item.get("quantity", 1)
+        qty = normalized_item.get("quantity", 1)
         if isinstance(qty, bool) or not isinstance(qty, int) or qty < 1:
             return {
                 "status": "error",
@@ -311,7 +342,6 @@ def calculate_quote(
             }
 
         canonical_id = product["id"]
-        resolved_products[canonical_id] = product
         new_total_qty = aggregated_quantities.get(canonical_id, 0) + qty
         stock = int(product["stock"])
 

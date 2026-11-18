@@ -16,7 +16,7 @@ from typing import Any, get_args
 
 from database.orders_db import (
     get_order_record,
-     get_support_ticket,
+    get_support_ticket,
     save_support_ticket,
     utc_now_iso,
 )
@@ -36,7 +36,8 @@ def lookup_order_status(order_id: str) -> dict[str, Any]:
     Deterministically look up an order, its x402 payment evidence, fulfillment grant status,
     and return eligibility from SQLite.
     """
-    record = get_order_record(order_id)
+    raw_id = str(order_id if order_id is not None else "").strip()
+    record = get_order_record(raw_id)
     if record is None:
         return {
             "status": "error",
@@ -55,7 +56,7 @@ def verify_order_claim(order_id: str, claim_type: str) -> dict[str, Any]:
     `duplicate_charge`, `unauthorized_purchase`, `charged_but_denied`) against
     SQLite `PurchaseEvidence` and `GrantEvidence`.
     """
-    normalized_claim = (claim_type or "").strip().lower()
+    normalized_claim = str(claim_type if claim_type is not None else "").strip().lower()
     if normalized_claim not in VALID_CLAIM_TYPES:
         return {
             "status": "error",
@@ -64,7 +65,7 @@ def verify_order_claim(order_id: str, claim_type: str) -> dict[str, Any]:
             "supported_claim_types": sorted(VALID_CLAIM_TYPES),
         }
 
-    normalized_order_id = (order_id or "").strip().upper()
+    normalized_order_id = str(order_id if order_id is not None else "").strip().upper()
     record = get_order_record(normalized_order_id)
 
     if record is None:
@@ -190,8 +191,7 @@ def verify_order_claim(order_id: str, claim_type: str) -> dict[str, Any]:
             verdict = "contradicted"
             reason_code = "GRANT_NOT_DENIED"
             summary = (
-                f"Grant {grant.grant_id} status is '{grant.grant_status}' "
-                f"(not denied or revoked)."
+                f"Grant {grant.grant_id} status is '{grant.grant_status}' (not denied or revoked)."
             )
             priority = "low"
 
@@ -224,8 +224,10 @@ def create_escalation_ticket(
     verification_verdict: str | None = None
     reason_code: str | None = None
     priority = "medium"
-    normalized_order_id = order_id.strip().upper() if order_id and order_id.strip() else None
-    normalized_claim = claim_type.strip().lower() if claim_type and claim_type.strip() else None
+    raw_order = str(order_id if order_id is not None else "").strip().upper()
+    raw_claim = str(claim_type if claim_type is not None else "").strip().lower()
+    normalized_order_id = raw_order if raw_order else None
+    normalized_claim = raw_claim if raw_claim else None
 
     if normalized_order_id and normalized_claim:
         verification = verify_order_claim(normalized_order_id, normalized_claim)
@@ -242,10 +244,10 @@ def create_escalation_ticket(
         ticket_id=ticket_id,
         status="success",
         ticket_status="open",
-        reason=reason,
+        reason=str(reason),
         message="A human support agent will contact you shortly.",
         session_id=session_id,
-        user_id=user_id,
+        user_id=str(user_id or "guest"),
         order_id=normalized_order_id,
         claim_type=normalized_claim,
         verification_verdict=verification_verdict,

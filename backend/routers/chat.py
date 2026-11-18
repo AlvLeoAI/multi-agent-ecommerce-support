@@ -1,18 +1,20 @@
 """
 Chat API Router with Persistent Memory, Deterministic Commerce Tools,
-Order/Evidence Verification & Hardened Quality Tracking (Resolves F-02..F-07).
+Order/Evidence Verification & Hardened Quality Tracking (Resolves F-02..F-07 & Phase 4 Audit).
 """
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import re
 import time
 import uuid
+from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from google.adk.agents import Agent
 from google.adk.models.google_llm import Gemini
 from google.adk.runners import InMemoryRunner
@@ -47,7 +49,7 @@ from services.pricing import calculate_quote, lookup_product
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
 # Model Configuration
-MODEL_NAME = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+MODEL_NAME = os.getenv("AGENT_MODEL", "gemini-2.5-flash")
 
 retry_config = types.HttpRetryOptions(
     attempts=5,
@@ -58,9 +60,30 @@ retry_config = types.HttpRetryOptions(
 
 gemini_model = Gemini(model=MODEL_NAME, retry_options=retry_config)
 
-# Initialize Quality Tracker
-quality_tracker = QualityTracker("ecommerce_agent.db")
+# Initialize Quality Tracker with anchored path
+quality_tracker = QualityTracker()
 logging.info("Quality Tracker Initialized")
+
+
+def _make_json_safe(obj: Any) -> Any:
+    """Recursively convert Decimal values to str so ADK FunctionResponse JSON serialization succeeds."""
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_make_json_safe(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_make_json_safe(v) for v in obj)
+    return obj
+
+
+def _wrap_json_safe_tool(func: Any) -> Any:
+    @functools.wraps(func)
+    def _wrapped(*args: Any, **kwargs: Any) -> Any:
+        return _make_json_safe(func(*args, **kwargs))
+
+    return _wrapped
 
 
 # --- Tools ---
@@ -86,11 +109,11 @@ def escalate_to_human_support(
     )
 
 
-escalate_tool = FunctionTool(func=escalate_to_human_support)
-calculate_quote_tool = FunctionTool(func=calculate_quote)
-lookup_product_price_tool = FunctionTool(func=lookup_product)
-lookup_order_status_tool = FunctionTool(func=lookup_order_status)
-verify_order_claim_tool = FunctionTool(func=verify_order_claim)
+escalate_tool = FunctionTool(func=_wrap_json_safe_tool(escalate_to_human_support))
+calculate_quote_tool = FunctionTool(func=_wrap_json_safe_tool(calculate_quote))
+lookup_product_price_tool = FunctionTool(func=_wrap_json_safe_tool(lookup_product))
+lookup_order_status_tool = FunctionTool(func=_wrap_json_safe_tool(lookup_order_status))
+verify_order_claim_tool = FunctionTool(func=_wrap_json_safe_tool(verify_order_claim))
 
 # --- Immutable Agent Instructions ---
 GENERAL_AGENT_INSTRUCTION = """You are a friendly customer support and order specialist.
@@ -132,6 +155,7 @@ STRICT SECURITY & DETERMINISM BOUNDARIES:
 # --- Specialist & Coordinator Agents ---
 general_agent = Agent(
     name="GeneralAgent",
+    description="Handles greetings, general store inquiries, order status, and human support escalation.",
     model=gemini_model,
     instruction=GENERAL_AGENT_INSTRUCTION,
     tools=[lookup_order_status_tool, verify_order_claim_tool, escalate_tool],
@@ -139,6 +163,7 @@ general_agent = Agent(
 
 order_support_agent = Agent(
     name="OrderSupportAgent",
+    description="Verifies order status, return eligibility, x402 settlement evidence, and dispute claims.",
     model=gemini_model,
     instruction=ORDER_SUPPORT_AGENT_INSTRUCTION,
     tools=[lookup_order_status_tool, verify_order_claim_tool, escalate_tool],
@@ -146,6 +171,7 @@ order_support_agent = Agent(
 
 product_agent = Agent(
     name="ProductAgent",
+    description="Searches the local SQLite product catalog, product specs, and real-time stock counts.",
     model=gemini_model,
     instruction=PRODUCT_AGENT_INSTRUCTION,
     tools=[get_product_info_tool, search_products_tool, check_inventory_tool],
@@ -153,6 +179,7 @@ product_agent = Agent(
 
 calculation_agent = Agent(
     name="CalculationAgent",
+    description="Calculates deterministic cart quotes, allowlisted discounts, and jurisdiction taxes.",
     model=gemini_model,
     instruction=CALCULATION_AGENT_INSTRUCTION,
     tools=[calculate_quote_tool, lookup_product_price_tool],
@@ -160,6 +187,7 @@ calculation_agent = Agent(
 
 coordinator_agent = Agent(
     name="CoordinatorAgent",
+    description="Coordinates e-commerce support requests across catalog, pricing, order evidence, and escalation specialists.",
     model=gemini_model,
     instruction=COORDINATOR_INSTRUCTION,
     tools=[
@@ -173,9 +201,21 @@ coordinator_agent = Agent(
     ],
 )
 
-_ROLE_SPOOF_PATTERN = re.compile(
-    r"(?im)^(\s*)(system|assistant|developer|instruction)\s*:",
+_XML_TAG_BREAKOUT_PATTERN = re.compile(
+    r"(?i)<(/?\s*(?:conversation_history|user_query)\b[^>]*)>",
 )
+
+_ROLE_SPOOF_PATTERN = re.compile(
+    r"(?im)(^\s*|(?:\[/?\s*(?:conversation_history|user_query)\b[^\]]*\]\s*)+)"
+    r"\[?(system|assistant|developer|instruction)\]?\s*[:\uff1a]",
+)
+
+_SPECIALIST_AGENTS: set[str] = {
+    "ProductAgent",
+    "CalculationAgent",
+    "OrderSupportAgent",
+    "GeneralAgent",
+}
 
 _TOOL_TO_AGENT_MAP: dict[str, str] = {
     "ProductAgent": "ProductAgent",
@@ -197,23 +237,11 @@ _TOOL_TO_AGENT_MAP: dict[str, str] = {
 def resolve_delegated_agent(turns: list[Any] | tuple[Any, ...]) -> str:
     """
     Inspect ADK runner turn objects (attributes and tool call/response parts)
-    to determine which specialist agent handled the request (resolves F-07).
-    Defaults to `'CoordinatorAgent'` when handled directly without specialist delegation.
+    to determine which specialist agent handled the request (resolves F-07 & MED-01).
+    Does not short-circuit on outer `author='CoordinatorAgent'` turns so intermediate
+    tool calls (`part.function_call.name`) are accurately attributed.
     """
     for turn in reversed(turns):
-        for attr in ("agent_name", "agent_used", "author"):
-            val = getattr(turn, attr, None)
-            if isinstance(val, str) and val in _TOOL_TO_AGENT_MAP:
-                return _TOOL_TO_AGENT_MAP[val]
-            if isinstance(val, str) and val in {
-                "ProductAgent",
-                "CalculationAgent",
-                "OrderSupportAgent",
-                "GeneralAgent",
-                "CoordinatorAgent",
-            }:
-                return val
-
         content = getattr(turn, "content", None)
         parts = getattr(content, "parts", None) if content is not None else None
         if parts and isinstance(parts, (list, tuple)):
@@ -224,12 +252,24 @@ def resolve_delegated_agent(turns: list[Any] | tuple[Any, ...]) -> str:
                     if isinstance(call_name, str) and call_name in _TOOL_TO_AGENT_MAP:
                         return _TOOL_TO_AGENT_MAP[call_name]
 
+        for attr in ("agent_name", "agent_used", "author"):
+            val = getattr(turn, attr, None)
+            if isinstance(val, str) and val in _TOOL_TO_AGENT_MAP:
+                return _TOOL_TO_AGENT_MAP[val]
+            if isinstance(val, str) and val in _SPECIALIST_AGENTS:
+                return val
+
     return "CoordinatorAgent"
 
 
 def sanitize_untrusted_text(text: str) -> str:
-    """Neutralize embedded role-spoofing prefixes inside untrusted user/history text."""
-    return _ROLE_SPOOF_PATTERN.sub(r"\1[untrusted-\2]:", text)
+    """
+    Neutralize embedded structural XML tags (`</user_query>`, `</conversation_history>`)
+    and role-spoofing prefixes (including bracketed and fullwidth-colon variants)
+    inside untrusted user/history text.
+    """
+    no_xml_breakout = _XML_TAG_BREAKOUT_PATTERN.sub(r"[\1]", str(text))
+    return _ROLE_SPOOF_PATTERN.sub(r"\1[untrusted-\2]:", no_xml_breakout)
 
 
 def build_turn_input_with_context(
@@ -278,9 +318,24 @@ async def send_message(request: ChatRequest) -> ChatResponse:
         # Build isolated user turn payload while keeping CoordinatorAgent.instruction immutable (fixes F-03)
         runner_turn_input = build_turn_input_with_context(user_query, conversation_context)
 
-        temp_runner = InMemoryRunner(agent=coordinator_agent)
+        temp_runner = InMemoryRunner(agent=coordinator_agent, app_name="ecommerce_support")
+        temp_runner.auto_create_session = True
 
-        adk_response_turns = await temp_runner.run(runner_turn_input)
+        if hasattr(temp_runner, "run_async"):
+            new_message = types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=runner_turn_input)],
+            )
+            adk_response_turns = [
+                event
+                async for event in temp_runner.run_async(
+                    user_id=user_id,
+                    session_id=session_id,
+                    new_message=new_message,
+                )
+            ]
+        else:
+            adk_response_turns = await temp_runner.run(runner_turn_input)
 
         # Validate turn sequence and extract sub-agent attribution before text extraction (fixes F-07)
         if not adk_response_turns or not isinstance(adk_response_turns, (list, tuple)):
@@ -295,8 +350,17 @@ async def send_message(request: ChatRequest) -> ChatResponse:
         if not parts or not isinstance(parts, (list, tuple)):
             raise ValueError("ADK runner turn is missing content parts.")
 
-        raw_text = getattr(parts[0], "text", None)
-        if not isinstance(raw_text, str) or not raw_text.strip():
+        raw_text = next(
+            (
+                p.text
+                for p in parts
+                if isinstance(getattr(p, "text", None), str)
+                and p.text.strip()
+                and not getattr(p, "thought", False)
+            ),
+            None,
+        )
+        if raw_text is None:
             raise ValueError("ADK runner turn is missing valid text content.")
 
         agent_response = raw_text
@@ -377,7 +441,9 @@ async def get_metrics() -> dict[str, Any]:
 
 
 @router.get("/quality-metrics")
-async def get_quality_metrics(days: int = 7) -> dict[str, Any]:
+async def get_quality_metrics(
+    days: int = Query(7, ge=1, le=365, description="Lookback window in days (1-365)"),
+) -> dict[str, Any]:
     try:
         summary = quality_tracker.get_metrics_summary(days=days)
         by_agent = quality_tracker.get_metrics_by_agent(days=days)
@@ -390,7 +456,7 @@ async def get_quality_metrics(days: int = 7) -> dict[str, Any]:
         }
     except Exception as e:
         logging.error(f"Error getting quality metrics: {str(e)}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/users/{user_id}/preferences")

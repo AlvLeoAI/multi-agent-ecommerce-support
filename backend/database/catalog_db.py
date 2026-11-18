@@ -8,14 +8,23 @@ discount codes.
 
 from __future__ import annotations
 
+import contextlib
 import json
+import math
+import os
 import sqlite3
+from collections.abc import Iterator
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 from typing import Any
 
-# Default SQLite database path (shared with chat_memory unless overridden in tests)
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "my_agent_data.db"
+_CANDIDATE_ROOT = Path(__file__).resolve().parent.parent.parent
+if _CANDIDATE_ROOT == Path("/") or not os.access(_CANDIDATE_ROOT, os.W_OK):
+    _DEFAULT_ROOT = Path(__file__).resolve().parent.parent
+else:
+    _DEFAULT_ROOT = _CANDIDATE_ROOT
+
+DB_PATH = Path(os.getenv("SQLITE_DB_PATH", str(_DEFAULT_ROOT / "my_agent_data.db")))
 SEED_JSON_PATH = Path(__file__).resolve().parent / "products.json"
 
 # Deterministic allowlist of promotional discount codes
@@ -51,6 +60,18 @@ DEFAULT_DISCOUNT_CODES: list[dict[str, Any]] = [
 ]
 
 
+@contextlib.contextmanager
+def _get_connection(db_path: Path | str | None = None) -> Iterator[sqlite3.Connection]:
+    target = Path(db_path) if db_path is not None else DB_PATH
+    conn = sqlite3.connect(target)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
+        yield conn
+    finally:
+        conn.close()
+
+
 def _decimal_to_cents(value: Decimal) -> int:
     quantized = value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     return int((quantized * 100).to_integral_value(rounding=ROUND_HALF_UP))
@@ -66,11 +87,9 @@ def init_catalog_db(
     seed_json_path: Path | str | None = None,
 ) -> None:
     """Create and idempotently seed the SQLite catalog and discount_codes tables."""
-    target_db = Path(db_path) if db_path is not None else DB_PATH
     target_seed = Path(seed_json_path) if seed_json_path is not None else SEED_JSON_PATH
 
-    conn = sqlite3.connect(target_db)
-    try:
+    with _get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -166,8 +185,6 @@ def init_catalog_db(
             )
 
         conn.commit()
-    finally:
-        conn.close()
 
 
 def _row_to_product_dict(row: tuple[Any, ...]) -> dict[str, Any]:
@@ -209,8 +226,7 @@ def list_catalog_products(
 ) -> list[dict[str, Any]]:
     """Return all catalog products from SQLite with optional category and stock filtering."""
     init_catalog_db()
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    with _get_connection() as conn:
         cursor = conn.cursor()
         query = """
             SELECT id, name, category, price, price_cents, sim_usdc_micros,
@@ -219,50 +235,45 @@ def list_catalog_products(
             WHERE 1=1
         """
         params: list[Any] = []
-        if category:
-            query += " AND category = ?"
-            params.append(category)
+        if category and str(category).strip():
+            query += " AND LOWER(category) = LOWER(?)"
+            params.append(str(category).strip())
         if in_stock_only:
             query += " AND stock > 0"
         query += " ORDER BY rowid ASC"
 
         cursor.execute(query, params)
         return [_row_to_product_dict(r) for r in cursor.fetchall()]
-    finally:
-        conn.close()
 
 
 def list_catalog_categories() -> list[str]:
     """Return ordered list of product categories from SQLite."""
     init_catalog_db()
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    with _get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT name FROM catalog_categories ORDER BY sort_order ASC")
         return [row[0] for row in cursor.fetchall()]
-    finally:
-        conn.close()
 
 
 def get_catalog_product(product_id: str) -> dict[str, Any] | None:
-    """Look up a single product by its exact canonical `product_id`."""
+    """Look up a single product by its canonical `product_id` (case-insensitive)."""
+    raw_id = str(product_id if product_id is not None else "").strip()
+    if not raw_id:
+        return None
     init_catalog_db()
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    with _get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
             SELECT id, name, category, price, price_cents, sim_usdc_micros,
                    stock, specs, description, tags, expected_restock
             FROM products
-            WHERE id = ?
+            WHERE LOWER(id) = LOWER(?)
             """,
-            (product_id,),
+            (raw_id,),
         )
         row = cursor.fetchone()
         return _row_to_product_dict(row) if row else None
-    finally:
-        conn.close()
 
 
 def find_catalog_product(product_id_or_name: str) -> dict[str, Any] | None:
@@ -270,12 +281,13 @@ def find_catalog_product(product_id_or_name: str) -> dict[str, Any] | None:
     Deterministic lookup by canonical ID or normalized product name.
     1. Exact match on `id` (case-insensitive).
     2. Exact match on `name` (case-insensitive).
-    3. Unambiguous substring match on `name` (only if exactly 1 product matches).
+    3. Unambiguous substring match on `name` (only if `len(needle) >= 3` and exactly 1 product matches).
     """
-    if not product_id_or_name or not product_id_or_name.strip():
+    raw = str(product_id_or_name if product_id_or_name is not None else "").strip()
+    if not raw:
         return None
 
-    needle = product_id_or_name.strip().lower()
+    needle = raw.lower()
     products = list_catalog_products()
 
     for prod in products:
@@ -286,9 +298,10 @@ def find_catalog_product(product_id_or_name: str) -> dict[str, Any] | None:
         if prod["name"].lower() == needle:
             return prod
 
-    substring_matches = [prod for prod in products if needle in prod["name"].lower()]
-    if len(substring_matches) == 1:
-        return substring_matches[0]
+    if len(needle) >= 3:
+        substring_matches = [prod for prod in products if needle in prod["name"].lower()]
+        if len(substring_matches) == 1:
+            return substring_matches[0]
 
     return None
 
@@ -300,18 +313,33 @@ def search_catalog_products(
     tags: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Deterministically filter products in SQLite by category, max_price, min_stock, and tags."""
-    products = list_catalog_products()
     max_price_cents: int | None = None
     if max_price is not None:
-        max_price_dec = Decimal(str(max_price)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        max_price_cents = _decimal_to_cents(max_price_dec)
+        if isinstance(max_price, bool):
+            raise ValueError("max_price must be a finite non-negative number")
+        try:
+            max_price_float = float(max_price)
+            max_price_dec = Decimal(str(max_price))
+        except (ValueError, TypeError, ArithmeticError) as exc:
+            raise ValueError("max_price must be a finite non-negative number") from exc
+        if not math.isfinite(max_price_float) or not max_price_dec.is_finite() or max_price_dec < 0:
+            raise ValueError("max_price must be a finite non-negative number")
+        max_price_cents = _decimal_to_cents(
+            max_price_dec.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        )
 
-    normalized_tags = {t.strip().lower() for t in tags if t and t.strip()} if tags else set()
+    products = list_catalog_products()
+    normalized_tags = (
+        {str(t).strip().lower() for t in tags if t is not None and str(t).strip()}
+        if tags
+        else set()
+    )
 
     results: list[dict[str, Any]] = []
     for prod in products:
-        if category and prod["category"].lower() != category.strip().lower():
-            continue
+        if category and str(category).strip():
+            if prod["category"].lower() != str(category).strip().lower():
+                continue
         if max_price_cents is not None and prod["price_cents"] > max_price_cents:
             continue
         if prod["stock"] < min_stock:
@@ -327,11 +355,11 @@ def search_catalog_products(
 
 def get_discount_code_record(code: str) -> dict[str, Any] | None:
     """Look up an allowlisted discount code in SQLite."""
-    if not code or not code.strip():
+    raw_code = str(code if code is not None else "").strip()
+    if not raw_code:
         return None
     init_catalog_db()
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    with _get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -339,7 +367,7 @@ def get_discount_code_record(code: str) -> dict[str, Any] | None:
             FROM discount_codes
             WHERE code = ?
             """,
-            (code.strip().upper(),),
+            (raw_code.upper(),),
         )
         row = cursor.fetchone()
         if not row:
@@ -351,8 +379,6 @@ def get_discount_code_record(code: str) -> dict[str, Any] | None:
             "active": bool(row[3]),
             "expires_at": row[4],
         }
-    finally:
-        conn.close()
 
 
 # Ensure catalog tables exist on module import

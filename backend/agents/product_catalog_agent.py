@@ -6,8 +6,10 @@ service (`backend/services/pricing.py`).
 
 from __future__ import annotations
 
+import functools
 import logging
 import os
+from decimal import Decimal
 from typing import Any
 
 from google.adk.agents import LlmAgent
@@ -27,7 +29,28 @@ retry_config = types.HttpRetryOptions(
     http_status_codes=[429, 500, 503, 504],
 )
 
-model_name = os.getenv("AGENT_MODEL", "gemini-2.0-flash-exp")
+model_name = os.getenv("AGENT_MODEL", "gemini-2.5-flash")
+
+
+def _make_json_safe(obj: Any) -> Any:
+    """Recursively convert Decimal values to str so ADK FunctionResponse JSON serialization succeeds."""
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_make_json_safe(v) for v in obj]
+    if isinstance(obj, tuple):
+        return tuple(_make_json_safe(v) for v in obj)
+    return obj
+
+
+def _wrap_json_safe_tool(func: Any) -> Any:
+    @functools.wraps(func)
+    def _wrapped(*args: Any, **kwargs: Any) -> Any:
+        return _make_json_safe(func(*args, **kwargs))
+
+    return _wrapped
 
 
 def get_product_info(product_name: str) -> dict[str, Any]:
@@ -42,12 +65,22 @@ def search_products(
     tags: list[str] | None = None,
 ) -> dict[str, Any]:
     """Search the SQLite product catalog with deterministic filters."""
-    matched = search_catalog_products(
-        category=category,
-        max_price=max_price,
-        min_stock=min_stock,
-        tags=tags,
-    )
+    try:
+        matched = search_catalog_products(
+            category=category,
+            max_price=max_price,
+            min_stock=min_stock,
+            tags=tags,
+        )
+    except ValueError as exc:
+        return {
+            "status": "error",
+            "error_code": "INVALID_PRICE_FILTER",
+            "message": str(exc),
+            "count": 0,
+            "products": [],
+        }
+
     results = [
         {
             "id": product["id"],
@@ -69,9 +102,9 @@ def check_inventory(product_name: str, requested_qty: int = 1) -> dict[str, Any]
     return check_stock(product_name, requested_qty=requested_qty)
 
 
-get_product_info_tool = FunctionTool(func=get_product_info)
-search_products_tool = FunctionTool(func=search_products)
-check_inventory_tool = FunctionTool(func=check_inventory)
+get_product_info_tool = FunctionTool(func=_wrap_json_safe_tool(get_product_info))
+search_products_tool = FunctionTool(func=_wrap_json_safe_tool(search_products))
+check_inventory_tool = FunctionTool(func=_wrap_json_safe_tool(check_inventory))
 
 PRODUCT_AGENT_INSTRUCTION = """You are a product catalog specialist for an e-commerce store.
 

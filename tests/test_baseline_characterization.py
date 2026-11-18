@@ -337,7 +337,7 @@ def test_quality_tracker_records_actual_subagent_and_surfaces_runner_errors(
         row = cursor.fetchone()
         assert row is not None
         agent_used, success, error_occurred = row
-        assert resp.status_code >= 400 or (not bool(success) and bool(error_occurred))
+        assert resp.status_code == 500 and not bool(success) and bool(error_occurred)
         assert agent_used == "ProductAgent"
     finally:
         conn.close()

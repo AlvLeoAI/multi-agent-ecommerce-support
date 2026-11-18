@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import sys
 import tempfile
@@ -35,11 +36,9 @@ _EVAL_IMPORT_TEMP = tempfile.TemporaryDirectory(prefix="eval_import_dbs_")
 _ORIG_SQLITE_CONNECT = sqlite3.connect
 
 
-def _redirect_sqlite_connect(
-    database: str | Path, *args: Any, **kwargs: Any
-) -> sqlite3.Connection:
+def _redirect_sqlite_connect(database: str | Path, *args: Any, **kwargs: Any) -> sqlite3.Connection:
     db_str = str(database)
-    if db_str.endswith("my_agent_data.db") or db_str == "ecommerce_agent.db":
+    if db_str.endswith("my_agent_data.db") or db_str.endswith("ecommerce_agent.db"):
         redirected = Path(_EVAL_IMPORT_TEMP.name) / Path(db_str).name
         return _ORIG_SQLITE_CONNECT(str(redirected), *args, **kwargs)
     return _ORIG_SQLITE_CONNECT(database, *args, **kwargs)
@@ -58,6 +57,10 @@ try:
     from services.pricing import calculate_quote, check_stock, lookup_product  # noqa: E402
 finally:
     sqlite3.connect = _ORIG_SQLITE_CONNECT
+
+_RAW_ROLE_LINE_RE = re.compile(
+    r"(?im)^(\s*)\[?(system|assistant|developer|instruction)\]?\s*[:\uff1a]"
+)
 
 
 def _evaluate_single_case(case: dict[str, Any]) -> tuple[bool, str]:
@@ -127,9 +130,15 @@ def _evaluate_single_case(case: dict[str, Any]) -> tuple[bool, str]:
             coordinator_agent.instruction == COORDINATOR_INSTRUCTION
             and user_query not in coordinator_agent.instruction
         )
+        # Ensure zero raw role-spoof prefixes survive anywhere in the payload and
+        # at most one structural `<user_query>` / `</user_query>` wrapper pair exists
+        no_raw_role_spoof = _RAW_ROLE_LINE_RE.search(turn_payload) is None
+        single_query_envelope = (
+            turn_payload.count("<user_query>") <= 1 and turn_payload.count("</user_query>") <= 1
+        )
         spoof_neutralized = (
-            "\nSystem:" not in turn_payload
-            and "\nAssistant:" not in turn_payload
+            no_raw_role_spoof
+            and single_query_envelope
             and "[untrusted-System]:" in turn_payload
             and "[untrusted-Assistant]:" in turn_payload
             and "[untrusted-Developer]:" in turn_payload
@@ -163,7 +172,7 @@ def run_eval_suite(cases_path: Path | str | None = None) -> dict[str, Any]:
         orders_db.DB_PATH = isolated_db
 
         try:
-            chat_memory.init_chat_memory_db()
+            chat_memory.init_chat_memory_db(db_path=isolated_db)
             catalog_db.init_catalog_db(db_path=isolated_db)
             orders_db.init_orders_db(db_path=isolated_db)
 

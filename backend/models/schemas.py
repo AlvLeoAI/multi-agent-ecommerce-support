@@ -99,7 +99,9 @@ class CustomerMemory(BaseModel):
     user_id: str = Field(..., description="User identifier")
     preferences: dict[str, Any] = Field(default={}, description="Customer preferences")
     past_queries: list[str] = Field(default=[], description="Recent queries")
-    recommended_products: list[str] = Field(default=[], description="Previously recommended products")
+    recommended_products: list[str] = Field(
+        default=[], description="Previously recommended products"
+    )
 
 
 # ========== PHASE 2: ORDER, EVIDENCE & CLAIM VERIFICATION CONTRACTS ==========

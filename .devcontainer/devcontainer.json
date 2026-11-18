@@ -1,7 +1,6 @@
 {
   "name": "Multi-Agent AI System",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
-  
   "customizations": {
     "codespaces": {
       "openFiles": [
@@ -12,25 +11,18 @@
     },
     "vscode": {
       "settings": {
-        "python.formatting.provider": "black",
         "editor.formatOnSave": true
       },
       "extensions": [
         "ms-python.python",
         "ms-python.vscode-pylance",
-        "ms-azuretools.vscode-docker", 
-        "yzhang.markdown-all-in-one",
-        "njpwerner.autodocstring"
+        "charliermarsh.ruff",
+        "ms-azuretools.vscode-docker",
+        "yzhang.markdown-all-in-one"
       ]
     }
   },
-
-  
-  "updateContentCommand": "sudo apt-get update && pip3 install --user -r requirements.txt",
-
- 
-  // "postAttachCommand": { ... },
-
+  "postCreateCommand": "sudo apt-get update && pip3 install --user -r backend/requirements.txt -r frontend/requirements.txt",
   "portsAttributes": {
     "8501": {
       "label": "Frontend (Streamlit)",
@@ -41,8 +33,6 @@
       "onAutoForward": "notify"
     }
   },
-
-  
   "forwardPorts": [
     8501,
     8000

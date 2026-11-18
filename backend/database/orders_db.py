@@ -6,8 +6,11 @@ and `support_tickets` tables).
 
 from __future__ import annotations
 
+import contextlib
 import json
+import os
 import sqlite3
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -19,8 +22,13 @@ from models.schemas import (
     SupportTicketContract,
 )
 
-# Default SQLite database path (shared with chat_memory and catalog_db)
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "my_agent_data.db"
+_CANDIDATE_ROOT = Path(__file__).resolve().parent.parent.parent
+if _CANDIDATE_ROOT == Path("/") or not os.access(_CANDIDATE_ROOT, os.W_OK):
+    _DEFAULT_ROOT = Path(__file__).resolve().parent.parent
+else:
+    _DEFAULT_ROOT = _CANDIDATE_ROOT
+
+DB_PATH = Path(os.getenv("SQLITE_DB_PATH", str(_DEFAULT_ROOT / "my_agent_data.db")))
 
 # Canonical reference orders & evidence envelopes covering all cross-repo scenarios
 SEED_ORDERS: list[dict[str, Any]] = [
@@ -246,11 +254,21 @@ SEED_ORDERS: list[dict[str, Any]] = [
 ]
 
 
+@contextlib.contextmanager
+def _get_connection(db_path: Path | str | None = None) -> Iterator[sqlite3.Connection]:
+    target = Path(db_path) if db_path is not None else DB_PATH
+    conn = sqlite3.connect(target)
+    try:
+        conn.execute("PRAGMA foreign_keys = ON")
+        conn.execute("PRAGMA busy_timeout = 5000")
+        yield conn
+    finally:
+        conn.close()
+
+
 def init_orders_db(db_path: Path | str | None = None) -> None:
     """Create and idempotently seed the `orders`, `order_evidence`, and `support_tickets` tables."""
-    target_db = Path(db_path) if db_path is not None else DB_PATH
-    conn = sqlite3.connect(target_db)
-    try:
+    with _get_connection(db_path) as conn:
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -270,7 +288,7 @@ def init_orders_db(db_path: Path | str | None = None) -> None:
                 order_id TEXT PRIMARY KEY,
                 purchase_evidence_json TEXT,
                 grant_evidence_json TEXT,
-                FOREIGN KEY (order_id) REFERENCES orders(order_id)
+                FOREIGN KEY (order_id) REFERENCES orders(order_id) ON DELETE CASCADE
             )
         """)
 
@@ -332,19 +350,16 @@ def init_orders_db(db_path: Path | str | None = None) -> None:
                 )
 
         conn.commit()
-    finally:
-        conn.close()
 
 
 def get_order_record(order_id: str) -> OrderRecordContract | None:
     """Retrieve a validated `OrderRecordContract` (with evidence) from SQLite."""
-    if not order_id or not str(order_id).strip():
+    normalized_id = str(order_id if order_id is not None else "").strip().upper()
+    if not normalized_id:
         return None
 
-    normalized_id = str(order_id).strip().upper()
     init_orders_db()
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    with _get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -387,15 +402,12 @@ def get_order_record(order_id: str) -> OrderRecordContract | None:
             purchase_evidence=purchase_ev,
             grant_evidence=grant_ev,
         )
-    finally:
-        conn.close()
 
 
 def save_support_ticket(ticket: SupportTicketContract) -> SupportTicketContract:
     """Persist a `SupportTicketContract` row into SQLite `support_tickets`."""
     init_orders_db()
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    with _get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -424,19 +436,16 @@ def save_support_ticket(ticket: SupportTicketContract) -> SupportTicketContract:
         )
         conn.commit()
         return ticket
-    finally:
-        conn.close()
 
 
 def get_support_ticket(ticket_id: str) -> SupportTicketContract | None:
     """Look up a persisted `SupportTicketContract` by `ticket_id`."""
-    if not ticket_id or not str(ticket_id).strip():
+    normalized_id = str(ticket_id if ticket_id is not None else "").strip().upper()
+    if not normalized_id:
         return None
 
-    normalized_id = str(ticket_id).strip().upper()
     init_orders_db()
-    conn = sqlite3.connect(DB_PATH)
-    try:
+    with _get_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
@@ -467,8 +476,6 @@ def get_support_ticket(ticket_id: str) -> SupportTicketContract | None:
             priority=row[11],
             created_at=row[12],
         )
-    finally:
-        conn.close()
 
 
 def utc_now_iso() -> str:
