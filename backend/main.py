@@ -3,44 +3,47 @@ E-Commerce Support API
 Multi-Agent Customer Support System
 """
 
-import uvicorn
-import os
 import logging
+import os
+from contextlib import asynccontextmanager
+
+import uvicorn
+from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-from dotenv import load_dotenv
 
 # --- 1. Load environment variables at startup ---
 # Path: backend/ -> ecommerce_support/ -> multi-agent-ecommerce/ (.env)
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=env_path)
 
-# # Import routers (after loading .env in case the routers need variables)
-from routers import products, metrics, chat
+# Import routers (after loading .env in case the routers need variables)
+from routers import chat, metrics, orders, products  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 
+
 # --- 2. Define Lifespan (Life Cycle) ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # # Startup logic
+    # Startup logic
     logging.info("🚀 E-Commerce Agent System is starting up...")
     logging.info("✅ Database connection established (Simulated)")
-    
+
     yield  # <--- The app runs here
-    
-    # # Shutdown logic
+
+    # Shutdown logic
     logging.info("🛑 Shutting down system...")
     logging.info("💤 Connections closed")
 
+
 # --- 3. Create the App (ONLY ONCE) ---
 app = FastAPI(
-    lifespan=lifespan,  # <--- Connected
+    lifespan=lifespan,
     title="E-Commerce Support API",
     description="Multi-Agent Customer Support System powered by Google GenAI",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # --- 4. Middlewares ---
@@ -56,7 +59,9 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(products.router)
 app.include_router(metrics.router)
+app.include_router(orders.router)
 logging.info("All routers included.")
+
 
 # --- 6. Endpoints Base ---
 @app.get("/")
@@ -68,20 +73,24 @@ async def root():
         "version": "1.0.0",
         "endpoints": {
             "chat": "/api/v1/chat/",
+            "orders": "/api/v1/orders/",
+            "tickets": "/api/v1/tickets/",
             "products": "/products",
             "metrics": "/metrics",
             "docs": "/docs",
-            "health": "/health"
-        }
+            "health": "/health",
+        },
     }
+
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
-        "service": "ecommerce-support-api"
+        "service": "ecommerce-support-api",
     }
+
 
 # --- 7. Entry Point ---
 if __name__ == "__main__":

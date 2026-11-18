@@ -3,12 +3,13 @@ Quality Metrics Dashboard
 Streamlit dashboard for visualizing agent performance metrics
 """
 
-import streamlit as st
+from datetime import datetime
+
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
-from datetime import datetime, timedelta
+import streamlit as st
 
 # Page config
 st.set_page_config(
@@ -38,7 +39,7 @@ def main():
     # Sidebar
     st.sidebar.title("Settings")
     days_filter = st.sidebar.slider("Days to analyze", 1, 30, 7)
-    refresh_button = st.sidebar.button("🔄 Refresh Data")
+    st.sidebar.button("🔄 Refresh Data")
     
     # Fetch data
     data = fetch_quality_metrics(days_filter)

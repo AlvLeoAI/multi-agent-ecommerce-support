@@ -3,9 +3,10 @@ Chat Page - Customer Support Chat Interface
 Real-time conversation with the Multi-Agent Support System
 """
 
-import streamlit as st
 import sys
 from pathlib import Path
+
+import streamlit as st
 
 # Add utils to path
 sys.path.append(str(Path(__file__).parent.parent))

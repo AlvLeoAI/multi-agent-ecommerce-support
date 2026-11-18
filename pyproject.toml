@@ -1,0 +1,44 @@
+[project]
+name = "multi-agent-ecommerce-support"
+version = "0.1.0"
+description = "Multi-Agent E-Commerce Customer Support System powered by Google ADK and FastAPI"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi==0.163.2",
+    "uvicorn[standard]==0.54.0",
+    "pydantic==2.14.3",
+    "python-dotenv==1.2.4",
+    "gunicorn==27.0.1",
+    "google-genai==2.34.0",
+    "google-cloud-aiplatform==2.10.0",
+    "google-adk==2.14.1",
+    "pandas==3.1.1",
+    "numpy==2.4.6",
+    "pytest==9.2.0",
+    "pytest-asyncio==1.5.0",
+    "httpx==0.28.1",
+    "ruff==0.17.5",
+    "protobuf==7.36.2",
+    "watchdog==6.0.0",
+    "plotly==7.1.0",
+    "streamlit==1.67.0",
+    "requests==2.34.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "backend"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["backend", "frontend", "tests", "eval"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]

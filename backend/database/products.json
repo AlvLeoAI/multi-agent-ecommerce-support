@@ -1,0 +1,90 @@
+{
+  "categories": [
+    "Laptops",
+    "Smartphones",
+    "Audio",
+    "Accessories"
+  ],
+  "products": [
+    {
+      "id": "prod-dell-xps-15",
+      "name": "Dell XPS 15",
+      "category": "Laptops",
+      "price": 1299.00,
+      "stock": 45,
+      "specs": {
+        "display": "15.6-inch 4K OLED",
+        "processor": "Intel Core i7",
+        "ram": "16GB",
+        "storage": "512GB SSD"
+      },
+      "description": "High-performance laptop ideal for video editing and creative workflows.",
+      "tags": [
+        "laptop",
+        "video editing",
+        "creator",
+        "oled"
+      ]
+    },
+    {
+      "id": "prod-iphone-15-pro",
+      "name": "iPhone 15 Pro",
+      "category": "Smartphones",
+      "price": 999.00,
+      "stock": 8,
+      "specs": {
+        "display": "6.1-inch Super Retina XDR",
+        "chip": "A17 Pro",
+        "storage": "256GB",
+        "camera": "48MP Main"
+      },
+      "description": "Titanium flagship smartphone with A17 Pro chip and pro camera system.",
+      "tags": [
+        "phone",
+        "smartphone",
+        "apple",
+        "pro"
+      ]
+    },
+    {
+      "id": "prod-sony-wh1000xm5",
+      "name": "Sony WH-1000XM5",
+      "category": "Audio",
+      "price": 399.00,
+      "stock": 0,
+      "specs": {
+        "type": "Over-Ear Wireless",
+        "battery_life": "30 hours",
+        "noise_cancellation": "Active Noise Cancellation (ANC)",
+        "connectivity": "Bluetooth 5.2"
+      },
+      "description": "Industry-leading noise cancelling wireless headphones for focused work.",
+      "tags": [
+        "headphones",
+        "audio",
+        "work",
+        "noise cancelling"
+      ],
+      "expected_restock": "2026-12-01"
+    },
+    {
+      "id": "prod-logitech-mx-master-3s",
+      "name": "Logitech MX Master 3S",
+      "category": "Accessories",
+      "price": 99.00,
+      "stock": 4,
+      "specs": {
+        "sensor": "8000 DPI Optical",
+        "buttons": 7,
+        "connectivity": "Bluetooth & Logi Bolt USB"
+      },
+      "description": "Ergonomic wireless performance mouse with ultra-fast MagSpeed scrolling.",
+      "tags": [
+        "mouse",
+        "ergonomic",
+        "work",
+        "accessories"
+      ]
+    }
+  ]
+}

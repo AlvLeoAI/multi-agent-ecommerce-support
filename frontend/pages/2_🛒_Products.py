@@ -1,7 +1,7 @@
-import streamlit as st
-import requests
-from typing import List, Dict, Optional
 import os
+
+import requests
+import streamlit as st
 
 # Configuration
 API_URL = os.getenv("API_URL", "http://localhost:8000")
@@ -13,12 +13,12 @@ st.set_page_config(
 )
 
 def get_products(
-    category: Optional[str] = None,
-    min_price: Optional[float] = None,
-    max_price: Optional[float] = None,
-    in_stock: Optional[bool] = None,
-    search: Optional[str] = None
-) -> List[Dict]:
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    in_stock: bool | None = None,
+    search: str | None = None
+) -> list[dict]:
     """Fetch products from the API with filters"""
     try:
         params = {}
@@ -49,7 +49,7 @@ def get_stock_badge(stock: int) -> str:
     else:
         return f'<span style="background-color: #00aa44; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold;">IN STOCK ({stock})</span>'
 
-def display_product_card(product: Dict):
+def display_product_card(product: dict):
     """Display a single product card"""
     with st.container():
         # Create a bordered card using HTML/CSS

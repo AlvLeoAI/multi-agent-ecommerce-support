@@ -3,9 +3,9 @@ API Client for E-Commerce Support Backend
 Handles all HTTP requests to the FastAPI backend
 """
 
-import requests
-from typing import Dict, Optional, List
 import os
+
+import requests
 
 
 class EcommerceAPIClient:
@@ -24,8 +24,8 @@ class EcommerceAPIClient:
         self,
         message: str,
         user_id: str = "streamlit_user",
-        session_id: Optional[str] = None
-    ) -> Dict:
+        session_id: str | None = None
+    ) -> dict:
         """
         Send a message to the customer support agent.
         
@@ -55,7 +55,7 @@ class EcommerceAPIClient:
                 "message": f"Failed to communicate with backend: {str(e)}"
             }
     
-    def get_products(self) -> Dict:
+    def get_products(self) -> dict:
         """
         Get all products from the catalog.
         
@@ -76,10 +76,10 @@ class EcommerceAPIClient:
     
     def search_products(
         self,
-        category: Optional[str] = None,
-        max_price: Optional[float] = None,
+        category: str | None = None,
+        max_price: float | None = None,
         in_stock_only: bool = False
-    ) -> Dict:
+    ) -> dict:
         """
         Search products with filters.
         
@@ -111,7 +111,7 @@ class EcommerceAPIClient:
                 "message": f"Failed to search products: {str(e)}"
             }
     
-    def get_metrics(self) -> Dict:
+    def get_metrics(self) -> dict:
         """
         Get chat metrics and statistics.
         
@@ -142,7 +142,7 @@ class EcommerceAPIClient:
         try:
             response = requests.get(url, timeout=5)
             return response.status_code == 200
-        except:
+        except Exception:
             return False
 
 
