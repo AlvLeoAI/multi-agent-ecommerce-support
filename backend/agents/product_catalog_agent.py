@@ -29,7 +29,7 @@ retry_config = types.HttpRetryOptions(
     http_status_codes=[429, 500, 503, 504],
 )
 
-model_name = os.getenv("AGENT_MODEL", "gemini-2.5-flash")
+model_name = os.getenv("AGENT_MODEL", "gemini-3.8-flash")
 
 
 def _make_json_safe(obj: Any) -> Any:

@@ -32,7 +32,7 @@ graph TD
     end
 
     subgraph "Agent Layer (Google ADK 2.14.1)"
-        Coord["🧠 CoordinatorAgent (gemini-2.5-flash)"]
+        Coord["🧠 CoordinatorAgent (gemini-3.8-flash)"]
         Gen["💬 GeneralAgent"]
         Ord["🧾 OrderSupportAgent"]
         Prod["📦 ProductAgent"]

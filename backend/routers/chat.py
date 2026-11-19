@@ -49,7 +49,7 @@ from services.pricing import calculate_quote, lookup_product
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
 
 # Model Configuration
-MODEL_NAME = os.getenv("AGENT_MODEL", "gemini-2.5-flash")
+MODEL_NAME = os.getenv("AGENT_MODEL", "gemini-3.8-flash")
 
 retry_config = types.HttpRetryOptions(
     attempts=5,

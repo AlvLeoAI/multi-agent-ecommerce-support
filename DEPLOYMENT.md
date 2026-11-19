@@ -23,7 +23,7 @@ docker build -f backend/Dockerfile -t ecommerce-agent:latest backend
 # Run the backend container locally on port 8080
 docker run --rm -p 8080:8080 \
   -e GOOGLE_API_KEY="your-gemini-api-key" \
-  -e AGENT_MODEL="gemini-2.5-flash" \
+  -e AGENT_MODEL="gemini-3.8-flash" \
   ecommerce-agent:latest
 ```
 
@@ -41,7 +41,7 @@ curl http://localhost:8080/products/
 | Variable | Default | Purpose |
 | :--- | :--- | :--- |
 | `GOOGLE_API_KEY` | *(Required for live LLM calls)* | Google GenAI API key used by `google-adk` (`Gemini`). |
-| `AGENT_MODEL` | `gemini-2.5-flash` | Gemini model identifier used by `CoordinatorAgent` and specialists. |
+| `AGENT_MODEL` | `gemini-3.8-flash` | Gemini model identifier used by `CoordinatorAgent` and specialists. |
 | `SQLITE_DB_PATH` | `<repo_root>/my_agent_data.db` (`/app/my_agent_data.db` in Docker) | Path to SQLite database for sessions, catalog, orders, and tickets. |
 | `QUALITY_DB_PATH` | `<repo_root>/ecommerce_agent.db` (`/app/ecommerce_agent.db` in Docker) | Path to SQLite database for `QualityTracker` telemetry. |
 | `API_BASE_URL` | `http://localhost:8000` | Backend base URL consumed by the Streamlit frontend. |
@@ -62,7 +62,7 @@ gcloud run deploy ecommerce-agent-backend \
   --region "$REGION" \
   --platform managed \
   --allow-unauthenticated \
-  --set-env-vars "AGENT_MODEL=gemini-2.5-flash,SQLITE_DB_PATH=/app/my_agent_data.db,QUALITY_DB_PATH=/app/ecommerce_agent.db" \
+  --set-env-vars "AGENT_MODEL=gemini-3.8-flash,SQLITE_DB_PATH=/app/my_agent_data.db,QUALITY_DB_PATH=/app/ecommerce_agent.db" \
   --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest" \
   --memory 1Gi \
   --cpu 1 \
