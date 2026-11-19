@@ -44,7 +44,7 @@ class EcommerceAPIClient:
         }
 
         try:
-            response = requests.post(url, json=payload, timeout=30)
+            response = requests.post(url, json=payload, timeout=60)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:

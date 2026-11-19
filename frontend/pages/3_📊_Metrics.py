@@ -12,14 +12,12 @@ import plotly.graph_objects as go
 import requests
 import streamlit as st
 
-# Page config
 st.set_page_config(
     page_title="Agent Quality Dashboard",
     page_icon="📊",
     layout="wide",
 )
 
-# Unified API Base URL configuration
 API_BASE_URL = os.getenv(
     "API_BASE_URL",
     os.getenv("API_URL", "http://localhost:8000"),
@@ -70,7 +68,7 @@ def main():
         )
 
     with col2:
-        avg_time = summary.get("avg_response_time") or 0.0
+        avg_time = float(summary.get("avg_response_time") or 0.0)
         st.metric(
             label="Avg Response Time",
             value=f"{avg_time:.2f}s",
@@ -78,7 +76,7 @@ def main():
         )
 
     with col3:
-        success_rate = summary.get("success_rate") or 0.0
+        success_rate = float(summary.get("success_rate") or 0.0)
         st.metric(
             label="Success Rate",
             value=f"{success_rate:.1f}%",
@@ -86,7 +84,7 @@ def main():
         )
 
     with col4:
-        avg_tokens = summary.get("avg_tokens") or 0.0
+        avg_tokens = float(summary.get("avg_tokens") or 0.0)
         st.metric(
             label="Avg Tokens/Conv",
             value=f"{avg_tokens:.0f}",
@@ -100,9 +98,10 @@ def main():
     with col1:
         st.markdown("### ⏱️ Response Time Performance")
 
-        avg_time = summary.get("avg_response_time") or 0.0
-        min_time = summary.get("min_response_time") or 0.0
-        max_time = summary.get("max_response_time") or 0.0
+        avg_time = float(summary.get("avg_response_time") or 0.0)
+        min_time = float(summary.get("min_response_time") or 0.0)
+        max_time = float(summary.get("max_response_time") or 0.0)
+        gauge_max = max(30.0, round(max(avg_time, max_time) * 1.25, 1))
 
         fig_gauge = go.Figure(
             go.Indicator(
@@ -110,19 +109,19 @@ def main():
                 value=avg_time,
                 domain={"x": [0, 1], "y": [0, 1]},
                 title={"text": "Average Response Time (seconds)"},
-                delta={"reference": 3.0, "increasing": {"color": "red"}},
+                delta={"reference": 15.0, "increasing": {"color": "red"}},
                 gauge={
-                    "axis": {"range": [None, 10]},
+                    "axis": {"range": [0, gauge_max]},
                     "bar": {"color": "darkblue"},
                     "steps": [
-                        {"range": [0, 2], "color": "lightgreen"},
-                        {"range": [2, 5], "color": "yellow"},
-                        {"range": [5, 10], "color": "lightcoral"},
+                        {"range": [0, 10], "color": "lightgreen"},
+                        {"range": [10, 20], "color": "yellow"},
+                        {"range": [20, gauge_max], "color": "lightcoral"},
                     ],
                     "threshold": {
                         "line": {"color": "red", "width": 4},
                         "thickness": 0.75,
-                        "value": 5,
+                        "value": 20,
                     },
                 },
             )
@@ -136,8 +135,8 @@ def main():
     with col2:
         st.markdown("### ✅ Success Rate")
 
-        success_rate = summary.get("success_rate") or 0.0
-        error_rate = summary.get("error_rate") or 0.0
+        success_rate = float(summary.get("success_rate") or 0.0)
+        error_rate = float(summary.get("error_rate") or 0.0)
 
         fig_success = go.Figure(
             go.Indicator(
@@ -146,7 +145,7 @@ def main():
                 domain={"x": [0, 1], "y": [0, 1]},
                 title={"text": "Success Rate (%)"},
                 gauge={
-                    "axis": {"range": [None, 100]},
+                    "axis": {"range": [0, 100]},
                     "bar": {"color": "green"},
                     "steps": [
                         {"range": [0, 70], "color": "lightcoral"},
@@ -223,6 +222,23 @@ def main():
             fig_agents.update_layout(height=300)
 
             st.plotly_chart(fig_agents, use_container_width=True)
+
+            # Specialist Agent Breakdown Table
+            breakdown_rows = [
+                {
+                    "agent_used": row.get("agent_used", "Unknown"),
+                    "conversations": int(row.get("conversations", 0)),
+                    "avg_response_time (s)": round(float(row.get("avg_response_time") or 0.0), 2),
+                    "avg_tokens": round(float(row.get("avg_tokens") or 0.0), 1),
+                    "success_rate (%)": round(float(row.get("success_rate") or 0.0), 1),
+                }
+                for row in by_agent
+            ]
+            st.dataframe(
+                pd.DataFrame(breakdown_rows),
+                use_container_width=True,
+                hide_index=True,
+            )
         else:
             st.info("No agent data available yet.")
 
@@ -294,24 +310,19 @@ def main():
         ],
         "Value": [
             summary.get("total_conversations", 0),
-            f"{summary.get('avg_response_time', 0):.3f}s",
-            f"{summary.get('min_response_time', 0):.3f}s",
-            f"{summary.get('max_response_time', 0):.3f}s",
+            f"{float(summary.get('avg_response_time') or 0.0):.3f}s",
+            f"{float(summary.get('min_response_time') or 0.0):.3f}s",
+            f"{float(summary.get('max_response_time') or 0.0):.3f}s",
             summary.get("total_tokens", 0),
-            f"{summary.get('avg_tokens', 0):.1f}",
-            f"{summary.get('avg_steps', 0):.1f}",
-            f"{summary.get('success_rate', 0):.2f}%",
-            f"{summary.get('error_rate', 0):.2f}%",
+            f"{float(summary.get('avg_tokens') or 0.0):.1f}",
+            f"{float(summary.get('avg_steps') or 0.0):.1f}",
+            f"{float(summary.get('success_rate') or 0.0):.2f}%",
+            f"{float(summary.get('error_rate') or 0.0):.2f}%",
         ],
     }
 
     df_summary = pd.DataFrame(summary_data)
     st.dataframe(df_summary, use_container_width=True, hide_index=True)
-
-    if by_agent:
-        st.markdown("#### Agent Breakdown")
-        df_agents_table = pd.DataFrame(by_agent)
-        st.dataframe(df_agents_table, use_container_width=True, hide_index=True)
 
     st.markdown("---")
     st.markdown(
