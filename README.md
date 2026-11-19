@@ -9,7 +9,7 @@
 
 ## 1. Executive Technical Summary
 
-`multi-agent-ecommerce-support` is the commercial front-office and post-purchase dispute verification layer of a **Transactional AI & Agentic Payments** engineering portfolio. Built with **Google Agent Development Kit (ADK)**, **Gemini 2.5 Flash**, **FastAPI**, **Pydantic v2**, **SQLite**, and **Streamlit**, it coordinates specialized support agents for catalog discovery, deterministic cart quote calculation, order/payment evidence verification, and verifiable human escalation.
+`multi-agent-ecommerce-support` is the commercial front-office and post-purchase dispute verification layer of a **Transactional AI & Agentic Payments** engineering portfolio. Built with **Google Agent Development Kit (ADK `2.14.1`)**, **Gemini 3.8 Flash**, **FastAPI**, **Pydantic v2**, **SQLite**, and **Streamlit**, it coordinates specialized support agents for catalog discovery, deterministic cart quote calculation, order/payment evidence verification, and verifiable human escalation. See [`.agents-cli-spec.md`](./.agents-cli-spec.md) for the formal Phase 0 agent specification and [`DEPLOYMENT.md`](./DEPLOYMENT.md) for non-root Docker & Google Cloud Run deployment instructions.
 
 ### Core Architectural Invariant
 
@@ -132,6 +132,6 @@ uv run streamlit run frontend/Home.py
 ## 6. Honest Scope & Known Limitations
 
 1. **Local SQLite Persistence vs. Distributed Concurrency**: Catalog, session memory, orders, tickets, and quality metrics use local SQLite files (`my_agent_data.db` and `ecommerce_agent.db`) for self-contained reproducibility. High-concurrency multi-replica deployments (e.g., Cloud Run with $>1$ instance) require migrating to PostgreSQL / Cloud SQL with `SELECT ... FOR UPDATE` row-level inventory locking.
-2. **Offline ADK Runner Double vs. Live Gemini 2.0 Flash Execution**: Automated tests and `eval/runner.py` execute deterministically offline without calling external LLM endpoints. Live multi-turn agent orchestration via `POST /api/v1/chat/` requires a valid `GOOGLE_API_KEY` environment variable.
+2. **Offline ADK Runner Double vs. Live Gemini 3.8 Flash Execution**: Automated tests and `eval/runner.py` execute deterministically offline without calling external LLM endpoints. Live multi-turn agent orchestration via `POST /api/v1/chat/` requires a valid `GOOGLE_API_KEY` environment variable (verified live on Google Cloud Run with `gemini-3.8-flash`).
 3. **Heuristic Token Estimation**: `QualityTracker` uses a deterministic character-based heuristic (`len(text) // 4`) so token accounting remains reproducible across offline and stubbed runs; production cost accounting should read exact `usage_metadata` token counts from the model provider response.
 4. **Simulated `x402` Settlement Evidence**: `PurchaseEvidence` records in `orders_db.py` represent pre-recorded settlement envelopes matching the schema of `Agentic-Payments-Lab` rather than live on-chain RPC queries.
