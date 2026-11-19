@@ -25,7 +25,7 @@ This repository is contractually aligned with four sibling repositories in the p
 
 | Sibling Repository | Shared Architectural Contract & Integration Surface | Implementation in This Repository |
 | :--- | :--- | :--- |
-| **[`Agentic-Payments-Lab`](https://github.com/AlvLeoAI/Agentic-Payments-Lab)** | Dual monetary representation (`amount_cents: int` at $10^2$ USD scale and `sim_usdc_micros: int` at $10^6$ `SIM-USDC` atomic scale), `x402` settlement protocol metadata, and `PurchaseEvidence` / `GrantEvidence` envelopes. | `backend/services/pricing.py` outputs `total_cents` and `total_sim_usdc_micros` on every quote; `backend/models/schemas.py` and `backend/database/orders_db.py` store `PurchaseEvidence` (`x402`, `tx_hash`, `sim_usdc_micros`, `charge_count`, `authorized_by_mandate`) and `GrantEvidence`. |
+| **[`Agentic-Payments-Lab`](https://github.com/AlvLeoAI/Agentic-Payments-Lab)** | Dual monetary representation (`amount_cents: int` at 10² USD scale and `sim_usdc_micros: int` at 10⁶ `SIM-USDC` atomic scale), `x402` settlement protocol metadata, and `PurchaseEvidence` / `GrantEvidence` envelopes. | `backend/services/pricing.py` outputs `total_cents` and `total_sim_usdc_micros` on every quote; `backend/models/schemas.py` and `backend/database/orders_db.py` store `PurchaseEvidence` (`x402`, `tx_hash`, `sim_usdc_micros`, `charge_count`, `authorized_by_mandate`) and `GrantEvidence`. |
 | **[`ticket-prioritization-api`](https://github.com/AlvLeoAI/ticket-prioritization-api)** | Deterministic dispute verification over the 4 canonical claim types (`charged_not_delivered`, `duplicate_charge`, `unauthorized_purchase`, `charged_but_denied`) producing a strict verdict (`confirmed`, `contradicted`, `unverifiable`), `reason_code`, and `recommended_priority`. | `backend/services/order_verification.py` (`verify_order_claim`) and `POST /api/v1/orders/{order_id}/verify-claim` deterministically evaluate claims against SQLite `PurchaseEvidence` and `GrantEvidence`. |
 | **[`Agent-Transaction-Monitoring`](https://github.com/AlvLeoAI/Agent-Transaction-Monitoring)** | Know-Your-Agent (KYA) mandate authorization boundary (`authorized_by_mandate: bool` and `mandate_id: str \| None`) where compliance/risk decisions are owned by deterministic rules rather than LLM inference. | `verify_order_claim` checks `PurchaseEvidence.authorized_by_mandate` and flags settled orders lacking a KYA mandate (`ORD-1004`) as `confirmed` `unauthorized_purchase` with `reason_code="MISSING_KYA_MANDATE_AUTHORIZATION"` and `recommended_priority="critical"`. |
 | **[`Clinic-Scheduling-Agent`](https://github.com/AlvLeoAI/Clinic-Scheduling-Agent)** | Strict separation between untrusted conversational context and deterministic SQLite state transitions, paired with a reproducible offline evaluation harness (`eval/`). | `CoordinatorAgent.instruction` is immutable; untrusted history is role-sanitized and passed via turn payloads (`build_turn_input_with_context`), and `eval/runner.py` verifies 24 golden cases 100% offline. |
@@ -68,8 +68,8 @@ flowchart TD
 ### 4.1 Fixed-Point Pricing & Dual Atomic Units (`backend/services/pricing.py`)
 * **Zero Caller-Supplied Prices**: `calculate_quote` rejects any item payload containing `unit_price`, `price`, `discount_percent`, or `discount` (`error_code="UNAUTHORIZED_PRICE_OVERRIDE"`).
 * **Inventory & Split-Line Protection**: Quantities are aggregated by canonical `product_id` across all cart lines before checking SQLite `stock`, preventing multi-line split bypasses (`OUT_OF_STOCK` / `INSUFFICIENT_STOCK`).
-* **Allowlisted Discounts & Caps**: Discount codes are validated against SQLite `discount_codes` (`WELCOME10`: 10% capped at \$200.00; `VIP15`: 15% capped at \$500.00; `SAVE5`: 5% capped at \$100.00; `EXPIRED20`: rejected with `EXPIRED_DISCOUNT_CODE`).
-* **Dual Representation**: Every quote returns `Decimal` fields quantized to `0.01` with `ROUND_HALF_UP`, integer `total_cents` ($10^2$), and integer `total_sim_usdc_micros` ($10^6$).
+* **Allowlisted Discounts & Caps**: Discount codes are validated against SQLite `discount_codes` (`WELCOME10`: 10% capped at $200.00; `VIP15`: 15% capped at $500.00; `SAVE5`: 5% capped at $100.00; `EXPIRED20`: rejected with `EXPIRED_DISCOUNT_CODE`).
+* **Dual Representation**: Every quote returns `Decimal` fields quantized to `0.01` with `ROUND_HALF_UP`, integer `total_cents` (10²), and integer `total_sim_usdc_micros` (10⁶).
 
 ### 4.2 Reference Orders & Evidence Ledger (`backend/database/orders_db.py`)
 Six canonical orders are idempotently seeded in SQLite for deterministic verification via `GET /api/v1/orders/{order_id}` and `POST /api/v1/orders/{order_id}/verify-claim`:
@@ -82,6 +82,32 @@ Six canonical orders are idempotently seeded in SQLite for deterministic verific
 | **`ORD-1004`** | `iPhone 15 Pro` (`999,000,000`) | `settled`, `charge_count=1`, `authorized_by_mandate=False` | `shipped` | `unauthorized_purchase` -> `confirmed` (`MISSING_KYA_MANDATE_AUTHORIZATION`, `priority="critical"`) |
 | **`ORD-1005`** | `Sony WH-1000XM5` (`399,000,000`) | `settled`, `charge_count=1`, `authorized_by_mandate=True` | `denied` | `charged_but_denied` -> `confirmed` (`SETTLED_BUT_ACCESS_GRANT_DENIED`, `priority="high"`) |
 | **`ORD-1006`** | `Logitech MX Master 3S` (`99,000,000`) | `None` (Missing settlement evidence) | `None` (Missing grant evidence) | Any claim -> `unverifiable` (`MISSING_EVIDENCE`, `priority="high"`) |
+
+#### Example Contract Responses
+
+`calculate_quote` (2× Dell XPS 15 + `WELCOME10` cap + `US-CA` 7.25% tax):
+```json
+{
+  "status": "success",
+  "subtotal": "2598.00",
+  "discount_amount": "200.00",
+  "tax_amount": "173.86",
+  "total": "2571.86",
+  "total_cents": 257186,
+  "total_sim_usdc_micros": 2571860000
+}
+```
+
+`POST /api/v1/orders/ORD-1004/verify-claim` (`{"claim_type": "unauthorized_purchase"}`):
+```json
+{
+  "order_id": "ORD-1004",
+  "claim_type": "unauthorized_purchase",
+  "verdict": "confirmed",
+  "reason_code": "MISSING_KYA_MANDATE_AUTHORIZATION",
+  "recommended_priority": "critical"
+}
+```
 
 ---
 
@@ -103,6 +129,8 @@ uv run python -m eval.runner
 ```
 
 ### 5.2 Offline Evaluation Scorecard (`eval/cases.jsonl`)
+
+> **Scope note**: This 24/24 (100%) offline scorecard validates the deterministic tool contracts, prompt-boundary sanitizer (`sanitize_untrusted_text` / `build_turn_input_with_context`), and offline harness — not probabilistic live-LLM robustness (see Section 6.2).
 
 | Category | Total | Passed | Failed | Pass Rate |
 | :--- | :---: | :---: | :---: | :---: |
@@ -131,7 +159,7 @@ uv run streamlit run frontend/Home.py
 
 ## 6. Honest Scope & Known Limitations
 
-1. **Local SQLite Persistence vs. Distributed Concurrency**: Catalog, session memory, orders, tickets, and quality metrics use local SQLite files (`my_agent_data.db` and `ecommerce_agent.db`) for self-contained reproducibility. High-concurrency multi-replica deployments (e.g., Cloud Run with $>1$ instance) require migrating to PostgreSQL / Cloud SQL with `SELECT ... FOR UPDATE` row-level inventory locking.
+1. **Local SQLite Persistence vs. Distributed Concurrency**: Catalog, session memory, orders, tickets, and quality metrics use local SQLite files (`my_agent_data.db` and `ecommerce_agent.db`) for self-contained reproducibility. High-concurrency multi-replica deployments (e.g., Cloud Run with >1 instance) require migrating to PostgreSQL / Cloud SQL with `SELECT ... FOR UPDATE` row-level inventory locking.
 2. **Offline ADK Runner Double vs. Live Gemini 3.8 Flash Execution**: Automated tests and `eval/runner.py` execute deterministically offline without calling external LLM endpoints. Live multi-turn agent orchestration via `POST /api/v1/chat/` requires a valid `GOOGLE_API_KEY` environment variable (verified live on Google Cloud Run with `gemini-3.8-flash`).
 3. **Heuristic Token Estimation**: `QualityTracker` uses a deterministic character-based heuristic (`len(text) // 4`) so token accounting remains reproducible across offline and stubbed runs; production cost accounting should read exact `usage_metadata` token counts from the model provider response.
 4. **Simulated `x402` Settlement Evidence**: `PurchaseEvidence` records in `orders_db.py` represent pre-recorded settlement envelopes matching the schema of `Agentic-Payments-Lab` rather than live on-chain RPC queries.
