@@ -33,7 +33,12 @@ data/
 
 # --- Environment & Secrets ---
 .env
-.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+secrets*
+credentials*
 .streamlit/secrets.toml
 
 # --- Logs ---

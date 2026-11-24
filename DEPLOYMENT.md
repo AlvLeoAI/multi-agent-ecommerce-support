@@ -45,12 +45,15 @@ curl http://localhost:8080/products/
 | `SQLITE_DB_PATH` | `<repo_root>/my_agent_data.db` (`/app/my_agent_data.db` in Docker) | Path to SQLite database for sessions, catalog, orders, and tickets. |
 | `QUALITY_DB_PATH` | `<repo_root>/ecommerce_agent.db` (`/app/ecommerce_agent.db` in Docker) | Path to SQLite database for `QualityTracker` telemetry. |
 | `API_BASE_URL` | `http://localhost:8000` | Backend base URL consumed by the Streamlit frontend. |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:8501,http://127.0.0.1:8501` | Comma-separated exact browser origins allowed by CORS. Wildcards are ignored. |
 
 ---
 
 ## 4. Google Cloud Run Deployment
 
-> **Note on Persistence**: Cloud Run container filesystems are ephemeral across instance restarts. For multi-instance production deployments, back the persistence layer with Cloud SQL (PostgreSQL).
+> **Note on Persistence**: Cloud Run container filesystems are ephemeral across instance restarts, and each instance has its own SQLite files. Keep `--max-instances 1` until the persistence layer is backed by Cloud SQL (PostgreSQL).
+
+> **Note on Access**: The API has no authentication or rate limiting, and every chat turn calls a paid model. Deploy with `--no-allow-unauthenticated` and grant `roles/run.invoker` only to the callers that need it (for example the frontend's service account). Do not expose the service publicly as-is, and delete it when the demo is over.
 
 ```bash
 export PROJECT_ID="your-gcp-project-id"
@@ -61,11 +64,11 @@ gcloud run deploy ecommerce-agent-backend \
   --source ./backend \
   --region "$REGION" \
   --platform managed \
-  --allow-unauthenticated \
+  --no-allow-unauthenticated \
   --set-env-vars "AGENT_MODEL=gemini-3.8-flash,SQLITE_DB_PATH=/app/my_agent_data.db,QUALITY_DB_PATH=/app/ecommerce_agent.db" \
   --set-secrets "GOOGLE_API_KEY=GOOGLE_API_KEY:latest" \
   --memory 1Gi \
   --cpu 1 \
-  --min-instances 1 \
-  --max-instances 5
+  --min-instances 0 \
+  --max-instances 1
 ```

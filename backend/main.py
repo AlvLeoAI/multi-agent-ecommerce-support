@@ -18,6 +18,7 @@ env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=env_path)
 
 # Import routers (after loading .env in case the routers need variables)
+from request_limits import RequestBodyLimitMiddleware, parse_cors_origins  # noqa: E402
 from routers import chat, metrics, orders, products  # noqa: E402
 
 # Configure logging
@@ -47,13 +48,19 @@ app = FastAPI(
 )
 
 # --- 4. Middlewares ---
+# Exact-origin allowlist from CORS_ALLOWED_ORIGINS (comma-separated); wildcards are
+# ignored. The API uses no cookies, so credentialed cross-origin requests stay off.
+CORS_ALLOWED_ORIGINS = parse_cors_origins(os.getenv("CORS_ALLOWED_ORIGINS"))
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=CORS_ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type"],
 )
+# Added last so it runs first: oversized bodies are refused before CORS or routing.
+app.add_middleware(RequestBodyLimitMiddleware)
 
 # --- 5. Routers ---
 app.include_router(chat.router)

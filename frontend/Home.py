@@ -79,8 +79,8 @@ with col1:
         ### Runtime, Security & Evaluation
         - **Model & Runtime**: **Gemini 3.8 Flash** on **Google ADK (`google-adk==2.14.1`)** via `InMemoryRunner.run_async`
         - **Backend**: FastAPI, Pydantic v2, SQLite (`PRAGMA foreign_keys = ON`)
-        - **Prompt Boundary Hardening**: Immutable system instructions with `<user_query>` XML envelope & role-spoof sanitization
-        - **Verification & Eval Rigor**: **66 automated tests** (`pytest`, 0 warnings) and **24/24 (100%)** offline golden evaluation suite (`eval/runner.py`)
+        - **Prompt Boundary Hardening**: Constant system instructions with `<user_query>` XML envelope & best-effort role-spoof sanitization
+        - **Verification & Eval Rigor**: **Automated offline test suite** (`pytest`, run in CI) and **24/24 (100%)** offline golden evaluation suite (`eval/runner.py`)
         """
     )
 
@@ -88,7 +88,7 @@ with col2:
     st.markdown(
         """
         ### 4 Specialist Agents + Coordinator
-        - **🧠 `CoordinatorAgent`**: Immutable routing prompt delegating to specialist `AgentTool`s
+        - **🧠 `CoordinatorAgent`**: Constant routing prompt delegating to specialist `AgentTool`s
         - **📦 `ProductAgent`**: Deterministic SQLite catalog search, specs & stock verification
         - **🧮 `CalculationAgent`**: Pure `Decimal` (`ROUND_HALF_UP`) + `amount_cents` / `sim_usdc_micros` ($10^6$) pricing engine — **zero LLM math**
         - **🧾 `OrderSupportAgent`**: Verifies x402 `PurchaseEvidence` & `GrantEvidence` dispute claims (`confirmed`, `contradicted`, `unverifiable`)

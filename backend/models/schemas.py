@@ -8,7 +8,16 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+# ========== REQUEST LIMITS ==========
+
+# Upper bound on one chat message. Longer inputs are rejected with 422 before any
+# model call, so a single request cannot run up an unbounded token bill.
+MAX_CHAT_MESSAGE_CHARS = 4000
+
+# Session and user identifiers are opaque client labels: a short, log-safe charset.
+IDENTIFIER_PATTERN = r"^[A-Za-z0-9_.:-]{1,128}$"
 
 # ========== MESSAGE MODELS ==========
 
@@ -24,9 +33,29 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     """Request to send a message to the support agent."""
 
-    message: str = Field(..., description="User's message", min_length=1)
-    user_id: str = Field(default="guest", description="User identifier")
-    session_id: str | None = Field(None, description="Session ID for conversation continuity")
+    message: str = Field(
+        ...,
+        description="User's message",
+        min_length=1,
+        max_length=MAX_CHAT_MESSAGE_CHARS,
+    )
+    user_id: str = Field(
+        default="guest",
+        description="User identifier",
+        pattern=IDENTIFIER_PATTERN,
+    )
+    session_id: str | None = Field(
+        None,
+        description="Session ID for conversation continuity",
+        pattern=IDENTIFIER_PATTERN,
+    )
+
+    @field_validator("message")
+    @classmethod
+    def message_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("message must contain non-whitespace text")
+        return value
 
 
 class ChatResponse(BaseModel):
