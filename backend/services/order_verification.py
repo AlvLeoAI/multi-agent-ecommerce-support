@@ -30,6 +30,10 @@ from models.schemas import (
 
 VALID_CLAIM_TYPES: set[str] = set(get_args(ClaimType))
 
+# Ticket fields arrive as model-supplied tool arguments, so they are bounded before storage.
+MAX_TICKET_REASON_CHARS = 2000
+MAX_TICKET_IDENTIFIER_CHARS = 128
+
 
 def lookup_order_status(order_id: str) -> dict[str, Any]:
     """
@@ -244,10 +248,12 @@ def create_escalation_ticket(
         ticket_id=ticket_id,
         status="success",
         ticket_status="open",
-        reason=str(reason),
+        reason=str(reason)[:MAX_TICKET_REASON_CHARS],
         message="A human support agent will contact you shortly.",
-        session_id=session_id,
-        user_id=str(user_id or "guest"),
+        session_id=(
+            str(session_id)[:MAX_TICKET_IDENTIFIER_CHARS] if session_id is not None else None
+        ),
+        user_id=str(user_id or "guest")[:MAX_TICKET_IDENTIFIER_CHARS],
         order_id=normalized_order_id,
         claim_type=normalized_claim,
         verification_verdict=verification_verdict,

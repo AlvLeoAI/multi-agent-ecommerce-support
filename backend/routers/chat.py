@@ -6,6 +6,7 @@ Order/Evidence Verification & Hardened Quality Tracking (Resolves F-02..F-07 & P
 from __future__ import annotations
 
 import functools
+import json
 import logging
 import os
 import re
@@ -14,7 +15,7 @@ import uuid
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Path, Query
 from google.adk.agents import Agent
 from google.adk.models.google_llm import Gemini
 from google.adk.runners import InMemoryRunner
@@ -38,7 +39,7 @@ from database.chat_memory import (
     save_user_preference,
 )
 from database.quality_tracker import QualityTracker, estimate_tokens
-from models.schemas import ChatRequest, ChatResponse
+from models.schemas import IDENTIFIER_PATTERN, ChatRequest, ChatResponse
 from services.order_verification import (
     create_escalation_ticket,
     lookup_order_status,
@@ -47,6 +48,14 @@ from services.order_verification import (
 from services.pricing import calculate_quote, lookup_product
 
 router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+
+# Clients get a fixed message on failure; the exception itself is only logged.
+GENERIC_CHAT_ERROR = "The support agent could not complete this request. Please try again."
+GENERIC_METRICS_ERROR = "Quality metrics are temporarily unavailable."
+MAX_PREFERENCES_BYTES = 8 * 1024
+
+SessionIdPath = Path(..., pattern=IDENTIFIER_PATTERN, description="Session identifier")
+UserIdPath = Path(..., pattern=IDENTIFIER_PATTERN, description="User identifier")
 
 # Model Configuration
 MODEL_NAME = os.getenv("AGENT_MODEL", "gemini-3.8-flash")
@@ -410,11 +419,11 @@ async def send_message(request: ChatRequest) -> ChatResponse:
         )
 
         logging.error(f"Error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=GENERIC_CHAT_ERROR) from e
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str) -> dict[str, Any]:
+async def get_session(session_id: str = SessionIdPath) -> dict[str, Any]:
     history = get_session_history(session_id)
     return {
         "session_id": session_id,
@@ -424,13 +433,13 @@ async def get_session(session_id: str) -> dict[str, Any]:
 
 
 @router.get("/users/{user_id}/sessions")
-async def get_user_session_list(user_id: str) -> dict[str, Any]:
+async def get_user_session_list(user_id: str = UserIdPath) -> dict[str, Any]:
     sessions = get_user_sessions(user_id)
     return {"user_id": user_id, "sessions": sessions, "total": len(sessions)}
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_session_endpoint(session_id: str) -> dict[str, Any]:
+async def delete_session_endpoint(session_id: str = SessionIdPath) -> dict[str, Any]:
     delete_session(session_id)
     return {"status": "deleted", "session_id": session_id}
 
@@ -456,16 +465,24 @@ async def get_quality_metrics(
         }
     except Exception as e:
         logging.error(f"Error getting quality metrics: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+        raise HTTPException(status_code=500, detail=GENERIC_METRICS_ERROR) from e
 
 
 @router.post("/users/{user_id}/preferences")
-async def save_preferences(user_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
+async def save_preferences(
+    preferences: dict[str, Any],
+    user_id: str = UserIdPath,
+) -> dict[str, Any]:
+    if len(json.dumps(preferences).encode("utf-8")) > MAX_PREFERENCES_BYTES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"preferences must serialize to at most {MAX_PREFERENCES_BYTES} bytes",
+        )
     save_user_preference(user_id, preferences)
     return {"status": "saved", "user_id": user_id}
 
 
 @router.get("/users/{user_id}/preferences")
-async def get_preferences(user_id: str) -> dict[str, Any]:
+async def get_preferences(user_id: str = UserIdPath) -> dict[str, Any]:
     prefs = get_user_preferences(user_id)
     return {"user_id": user_id, "preferences": prefs or {}}

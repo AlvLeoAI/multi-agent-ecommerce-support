@@ -11,7 +11,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 router = APIRouter(prefix="/metrics", tags=["metrics"])
 
@@ -69,28 +69,6 @@ async def get_metrics_overview() -> dict[str, Any]:
     }
 
 
-@router.get("/products/top-queried")
-async def get_top_queried_products(limit: int = 10) -> list[dict[str, Any]]:
-    """Get catalog products with query statistics."""
-    products = list_catalog_products()[:limit]
-    by_agent_df = chat_router.quality_tracker.get_metrics_by_agent(days=30)
-    by_agent_records = by_agent_df.to_dict("records") if not by_agent_df.empty else []
-    product_agent_calls = sum(
-        int(r["conversations"]) for r in by_agent_records if r.get("agent_used") == "ProductAgent"
-    )
-    return [
-        {
-            "product_id": p["id"],
-            "product_name": p["name"],
-            "category": p["category"],
-            "query_count": product_agent_calls if idx == 0 else 0,
-            "price": p["price"],
-            "stock": p["stock"],
-        }
-        for idx, p in enumerate(products)
-    ]
-
-
 @router.get("/products/by-category")
 async def get_product_distribution() -> dict[str, Any]:
     """Get product distribution by category from SQLite catalog."""
@@ -123,7 +101,9 @@ async def get_product_distribution() -> dict[str, Any]:
 @router.get("/agents")
 @router.get("/performance")
 @router.get("/agents/performance")
-async def get_agent_performance(days: int = 30) -> dict[str, Any]:
+async def get_agent_performance(
+    days: int = Query(30, ge=1, le=365, description="Lookback window in days (1-365)"),
+) -> dict[str, Any]:
     """Get live agent performance metrics from QualityTracker and chat memory."""
     chat_data = get_db_chat_metrics()
     quality_summary = chat_router.quality_tracker.get_metrics_summary(days=days)
