@@ -11,7 +11,7 @@
 * **Zero LLM-Supplied Prices or Discounts**: `CalculationAgent` never uses `BuiltInCodeExecutor` or floating-point math. It calls pure `decimal.Decimal` (`ROUND_HALF_UP`) functions (`calculate_quote`, `lookup_product`) in `backend/services/pricing.py` that resolve prices and allowlisted discount caps directly from SQLite (`backend/database/catalog_db.py`).
 * **Deterministic Catalog Grounding**: `ProductAgent` never uses open web search (`google_search`). It queries the local SQLite catalog (`get_product_info`, `search_products`, `check_inventory`).
 * **Evidence-Backed Dispute Verification**: `OrderSupportAgent` and `GeneralAgent` verify customer dispute claims (`charged_not_delivered`, `duplicate_charge`, `unauthorized_purchase`, `charged_but_denied`) against SQLite `PurchaseEvidence` (`x402`, `amount_cents`, `sim_usdc_micros`, `authorized_by_mandate`, `charge_count`) and `GrantEvidence` (`backend/services/order_verification.py`).
-* **Immutable Prompt Boundary**: `CoordinatorAgent.instruction` is immutable; untrusted user queries and conversation history are sanitized against role-spoofing and XML tag breakouts (`sanitize_untrusted_text`) and passed via `InMemoryRunner.run_async` user messages.
+* **Constant Prompt Boundary**: `CoordinatorAgent.instruction` is a module constant that request handling never modifies; untrusted user queries and conversation history are sanitized against role-spoofing and XML tag breakouts (`sanitize_untrusted_text`) and passed via `InMemoryRunner.run_async` user messages.
 
 ---
 
@@ -68,7 +68,7 @@ graph TD
 
 | Agent | Responsibility | Registered `FunctionTool` Wrappers | Backing Service / SQLite Module |
 | :--- | :--- | :--- | :--- |
-| **`CoordinatorAgent`** | Routes sanitized user turns to specialists; holds immutable system instructions. | `AgentTool(GeneralAgent)`, `AgentTool(OrderSupportAgent)`, `AgentTool(ProductAgent)`, `AgentTool(CalculationAgent)`, `lookup_order_status`, `verify_order_claim`, `escalate_to_human_support` | `backend/routers/chat.py` |
+| **`CoordinatorAgent`** | Routes sanitized user turns to specialists; holds a constant system instruction. | `AgentTool(GeneralAgent)`, `AgentTool(OrderSupportAgent)`, `AgentTool(ProductAgent)`, `AgentTool(CalculationAgent)`, `lookup_order_status`, `verify_order_claim`, `escalate_to_human_support` | `backend/routers/chat.py` |
 | **`ProductAgent`** | Catalog discovery, SKU lookup, and stock verification. | `get_product_info`, `search_products`, `check_inventory` | `backend/database/catalog_db.py`, `backend/services/pricing.py` |
 | **`CalculationAgent`** | Cart subtotal, allowlisted discount code, and jurisdiction tax calculation. | `calculate_quote`, `lookup_product` (`_make_json_safe` wrapped) | `backend/services/pricing.py` (`Decimal` `ROUND_HALF_UP`, $10^2$ cents, $10^6$ `sim_usdc_micros`) |
 | **`OrderSupportAgent`** | Order status, return eligibility, `x402` settlement evidence, and claim verification. | `lookup_order_status`, `verify_order_claim`, `escalate_to_human_support` | `backend/database/orders_db.py`, `backend/services/order_verification.py` |
